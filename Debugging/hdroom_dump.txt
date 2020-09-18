@@ -1,0 +1,132 @@
+NAME
+
+        hdroom_dump - Dump mlxsw headroom configuration
+
+SYNOPSIS:
+
+        hdroom_dump
+
+DESCRIPTION:
+
+        On Spectrum, port buffers, also called port headroom, is where packets
+        are stored while they are parsed and the forwarding decision is being
+        made. For lossless traffic flows, in case shared buffer admission is not
+        allowed, headroom is also where to put the extra traffic received before
+        the sent PAUSE takes effect. Another aspect of the port headroom is the
+        so called internal buffer, which is used for packets that are mirrored
+        due to triggers that the Spectrum ASIC considers "egress". Besides ACL
+        mirroring on port egress this includes also packets mirrored due to ECN
+        marking.
+
+        hdroom_dump is a tool written on top of drgn, for dumping internal
+        structures of mlxsw driver related to headroom management. That way it
+        is possible to find out how headroom is configured in the ASIC.
+
+OUTPUT
+
+	As an output, hdroom_dump emits a JSON object with the following
+	attributes:
+
+	.cell_size
+            Granularity of the chip memory. The same cell size is reported also
+            through "devlink sb pool show".
+
+        .max_headroom_cells
+            Maximum number of cells that FW permits to configure for headroom
+            on one port.
+
+        .ports.<port-name>.mode
+            "DCB" or "TC". In DCB mode, headroom is autoconfigured from ETS
+            configuration. In "TC" mode, it is configured through the DCB
+            buffer commands.
+
+        .ports.<port-name>.mtu
+            Current port MTU value in bytes.
+
+        .ports.<port-name>.max_mtu
+            Maximum MTU permitted on this port.
+
+        .ports.<port-name>.max_speed
+            Maximum speed of this port in Mbps.
+
+        .ports.<port-name>.delay_bytes
+            Number of bytes of delay configured through DCB PFC interface.
+
+        .ports.<port-name>.prios.<prio>.ets_buf_idx
+        .ports.<port-name>.prios.<prio>.set_buf_idx
+        .ports.<port-name>.prios.<prio>.buf_idx
+            The index of the buffer that should take traffic with priority
+            <prio>, as configured through, respectively, DCB ETS, DCB buffer
+            and that was actually configured in the ASIC.
+
+        .ports.<port-name>.prios.<prio>.lossy
+            Whether this priority is marked as lossy by the DCB PFC
+            configuration.
+
+        .ports.<port-name>.bufs.<buf>.size_cells
+            Buffer size in cells.
+
+        .ports.<port-name>.bufs.<buf>.thres_cells
+            Buffer Xon/Xoff threshold in cells.
+
+        .ports.<port-name>.bufs.<buf>.lossy
+            Whether the given buffer is lossy. In Spectrum, lossiness is an
+            attribute of a buffer, not of a priority, so this shows how the
+            buffer was actually configured.
+
+        .ports.<port-name>.int_buf.enable
+            Whether the internal mirroring buffer is enabled, i.e. whether
+            there are any mirroring sessions that are considered "egress".
+
+        .ports.<port-name>.int_buf.size_cells
+            Internal mirroring buffer size in cells.
+
+        .ports.<port-name>.int_buf.reserve_cells
+            Amount of space in cells that is always reserved in the headroom
+            for the internal mirroring buffer.
+
+	hdroom_dump always outputs the complete information. Filtering and
+        querying can be done e.g. through `jq'.
+
+EXAMPLE:
+
+    # hdroom_dump  | jq .ports.swp1
+    {
+      "max_mtu": 10240,
+      "max_speed": 25000,
+      "mode": "TC",
+      "mtu": 1500,
+      "delay_bytes": 0,
+      "prios": {
+        "0": {
+          "buf_idx": 0,
+          "ets_buf_idx": 0,
+          "set_buf_idx": 0,
+          "lossy": true
+        },
+        [...]
+      },
+      "bufs": {
+        "0": {
+          "thres_cells": 32,
+          "size_cells": 4627,
+          "lossy": true
+        },
+        [...]
+        "9": {
+          "thres_cells": 0,
+          "size_cells": 107,
+          "lossy": false
+        }
+      },
+      "int_buf": {
+        "enable": true,
+        "size_cells": 268,
+        "reserve_cells": 268
+      }
+    }
+
+SEE ALSO:
+
+    https://github.com/Mellanox/mlxsw/wiki
+    https://drgn.readthedocs.io
