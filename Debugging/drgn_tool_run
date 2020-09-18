@@ -1,0 +1,9 @@
+#!/bin/sh
+
+# Python 3 does not allow import from the same directory for plain
+# programs. Creating a full-blown package for the few helpers that we use
+# is an overkill. Instead, let's have this launcher that exports to
+# PYTHONPATH the directory that the tool is run from.
+
+dir=$(dirname $0)
+PYTHONPATH=$dir${dir+:}$PYTHONPATH python3 $0.py
