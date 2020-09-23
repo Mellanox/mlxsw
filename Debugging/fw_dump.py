@@ -45,7 +45,14 @@ def verify_dependencies():
 
     return 0
 
-def dump_fw(pci_addr, tar_path):
+def dump_fw(p, pci_addr, tar_path):
+    if p.poll() is not None:
+        return
+
+    line = read_line(p)
+    if "state error" not in line:
+        return
+
     date_time_str = datetime.now().strftime("%d.%m.%Y,%H:%M:%S")
     tar_name = date_time_str + "-mstregdump.tar.xz"
 
@@ -78,7 +85,7 @@ def main(cmdline=None):
     while p.poll() is None:
         line = read_line(p)
         if "fw_fatal" in line:
-            dump_fw(pci_addr, args.output_path)
+            dump_fw(p, pci_addr, args.output_path)
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))
