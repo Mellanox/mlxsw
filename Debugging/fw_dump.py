@@ -45,6 +45,29 @@ def verify_dependencies():
 
     return 0
 
+def send_command(p, cmd):
+    p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
+    # Return out, err
+    return p.communicate()
+
+def devlink_health_dump(p, pci_addr):
+    cmd = "echo 'devlink health show' > /tmp/devlink_health_dump.txt"
+    send_command(p, cmd)
+
+    cmd = "devlink health show >> /tmp/devlink_health_dump.txt"
+    send_command(p, cmd)
+
+    cmd = "echo '' >> /tmp/devlink_health_dump.txt"
+    send_command(p, cmd)
+
+    cmd = "echo 'devlink health dump show pci/0000:%s reporter fw_fatal' >> \
+            /tmp/devlink_health_dump.txt" % pci_addr
+    send_command(p, cmd)
+
+    cmd = "devlink health dump show pci/0000:%s reporter fw_fatal >> \
+            /tmp/devlink_health_dump.txt" % pci_addr
+    send_command(p, cmd)
+
 def dump_fw(p, pci_addr, tar_path):
     if p.poll() is not None:
         return
@@ -60,11 +83,13 @@ def dump_fw(p, pci_addr, tar_path):
     p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
     out, err = p.communicate()
 
-    cmd = "cd /tmp && tar cvJf %s/%s mstregdump[123]" % (tar_path, tar_name)
+    devlink_health_dump(p, pci_addr)
+
+    cmd = "cd /tmp && tar cvJf %s/%s mstregdump[123] devlink_health_dump.txt" % (tar_path, tar_name)
     p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
     out, err = p.communicate()
 
-    cmd = "rm -rf /tmp/mstregdump*"
+    cmd = "rm -rf /tmp/mstregdump* /tmp/devlink_health_dump.txt"
     p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
 
 def main(cmdline=None):
