@@ -1,0 +1,3 @@
+[submodule "Debugging/libbpf-tools/libbpf"]
+	path = Debugging/libbpf-tools/libbpf
+	url = https://github.com/libbpf/libbpf.git

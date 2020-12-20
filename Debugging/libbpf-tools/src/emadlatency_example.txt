@@ -1,0 +1,274 @@
+Demonstration of emadlatency.
+
+EMADs (Ethernet Management Datagrams) are configuration packets
+exchanged between the mlxsw driver and the underlying device/firmware
+over a bus such as PCI or I2C. These packets are similar in nature to
+the netlink packets exchanged between user space and kernel.
+
+Each EMAD transaction initiated by the driver encodes a single register
+and is either a request to write to the register or a request to query
+from it.
+
+emadlatency traces EMADs and records the distribution of their latency
+(time) on a per-{register, write/query} basis. The distribution is
+printed as a histogram when Ctrl-C is hit. For example:
+
+# ./emadlatency
+Tracing EMADs... Hit Ctrl-C to end.
+^C
+Register query = SFN (0x200b)
+     usecs               : count    distribution
+         0 -> 1          : 0        |                                        |
+         2 -> 3          : 0        |                                        |
+         4 -> 7          : 0        |                                        |
+         8 -> 15         : 0        |                                        |
+        16 -> 31         : 0        |                                        |
+        32 -> 63         : 0        |                                        |
+        64 -> 127        : 0        |                                        |
+       128 -> 255        : 0        |                                        |
+       256 -> 511        : 0        |                                        |
+       512 -> 1023       : 0        |                                        |
+      1024 -> 2047       : 3        |****************************************|
+
+For efficiency, emadlatency uses an in-kernel BPF map to store
+timestamps with transactions, and another in-kernel map to store the
+histogram (the "count") column, which is copied to user-space only when
+output is printed. These methods lower the performance overhead when
+tracing is performed.
+
+In the following example, the -T option is used to print timestamps with
+the output and to print 1 second summaries 3 times:
+
+# ./emadlatency -T 1 3
+19:46:02
+Register query = PPCNT (0x5008)
+     usecs               : count    distribution
+         0 -> 1          : 0        |                                        |
+         2 -> 3          : 0        |                                        |
+         4 -> 7          : 0        |                                        |
+         8 -> 15         : 0        |                                        |
+        16 -> 31         : 0        |                                        |
+        32 -> 63         : 0        |                                        |
+        64 -> 127        : 0        |                                        |
+       128 -> 255        : 35       |********************************        |
+       256 -> 511        : 4        |***                                     |
+       512 -> 1023       : 43       |****************************************|
+      1024 -> 2047       : 2        |*                                       |
+Register query = SFN (0x200b)
+     usecs               : count    distribution
+         0 -> 1          : 0        |                                        |
+         2 -> 3          : 0        |                                        |
+         4 -> 7          : 0        |                                        |
+         8 -> 15         : 0        |                                        |
+        16 -> 31         : 0        |                                        |
+        32 -> 63         : 0        |                                        |
+        64 -> 127        : 0        |                                        |
+       128 -> 255        : 0        |                                        |
+       256 -> 511        : 1        |****                                    |
+       512 -> 1023       : 0        |                                        |
+      1024 -> 2047       : 9        |****************************************|
+Register query = MTMP (0x900a)
+     usecs               : count    distribution
+         0 -> 1          : 0        |                                        |
+         2 -> 3          : 0        |                                        |
+         4 -> 7          : 0        |                                        |
+         8 -> 15         : 0        |                                        |
+        16 -> 31         : 0        |                                        |
+        32 -> 63         : 0        |                                        |
+        64 -> 127        : 0        |                                        |
+       128 -> 255        : 0        |                                        |
+       256 -> 511        : 0        |                                        |
+       512 -> 1023       : 0        |                                        |
+      1024 -> 2047       : 1        |****************************************|
+
+19:46:03
+Register query = RAUHTD (0x8018)
+     usecs               : count    distribution
+         0 -> 1          : 0        |                                        |
+         2 -> 3          : 0        |                                        |
+         4 -> 7          : 0        |                                        |
+         8 -> 15         : 0        |                                        |
+        16 -> 31         : 0        |                                        |
+        32 -> 63         : 0        |                                        |
+        64 -> 127        : 0        |                                        |
+       128 -> 255        : 0        |                                        |
+       256 -> 511        : 0        |                                        |
+       512 -> 1023       : 0        |                                        |
+      1024 -> 2047       : 1        |****************************************|
+      2048 -> 4095       : 1        |****************************************|
+Register query = PPCNT (0x5008)
+     usecs               : count    distribution
+         0 -> 1          : 0        |                                        |
+         2 -> 3          : 0        |                                        |
+         4 -> 7          : 0        |                                        |
+         8 -> 15         : 0        |                                        |
+        16 -> 31         : 0        |                                        |
+        32 -> 63         : 0        |                                        |
+        64 -> 127        : 0        |                                        |
+       128 -> 255        : 35       |****************************************|
+       256 -> 511        : 31       |***********************************     |
+       512 -> 1023       : 15       |*****************                       |
+      1024 -> 2047       : 2        |**                                      |
+      2048 -> 4095       : 1        |*                                       |
+Register query = SFN (0x200b)
+     usecs               : count    distribution
+         0 -> 1          : 0        |                                        |
+         2 -> 3          : 0        |                                        |
+         4 -> 7          : 0        |                                        |
+         8 -> 15         : 0        |                                        |
+        16 -> 31         : 0        |                                        |
+        32 -> 63         : 0        |                                        |
+        64 -> 127        : 0        |                                        |
+       128 -> 255        : 0        |                                        |
+       256 -> 511        : 1        |*****                                   |
+       512 -> 1023       : 0        |                                        |
+      1024 -> 2047       : 8        |****************************************|
+      2048 -> 4095       : 1        |*****                                   |
+Register query = MTMP (0x900a)
+     usecs               : count    distribution
+         0 -> 1          : 0        |                                        |
+         2 -> 3          : 0        |                                        |
+         4 -> 7          : 0        |                                        |
+         8 -> 15         : 0        |                                        |
+        16 -> 31         : 0        |                                        |
+        32 -> 63         : 0        |                                        |
+        64 -> 127        : 0        |                                        |
+       128 -> 255        : 0        |                                        |
+       256 -> 511        : 0        |                                        |
+       512 -> 1023       : 0        |                                        |
+      1024 -> 2047       : 0        |                                        |
+      2048 -> 4095       : 1        |****************************************|
+
+19:46:04
+Register query = PPCNT (0x5008)
+     usecs               : count    distribution
+         0 -> 1          : 0        |                                        |
+         2 -> 3          : 0        |                                        |
+         4 -> 7          : 0        |                                        |
+         8 -> 15         : 0        |                                        |
+        16 -> 31         : 0        |                                        |
+        32 -> 63         : 0        |                                        |
+        64 -> 127        : 0        |                                        |
+       128 -> 255        : 15       |*************                           |
+       256 -> 511        : 22       |*******************                     |
+       512 -> 1023       : 45       |****************************************|
+      1024 -> 2047       : 2        |*                                       |
+Register query = SFN (0x200b)
+     usecs               : count    distribution
+         0 -> 1          : 0        |                                        |
+         2 -> 3          : 0        |                                        |
+         4 -> 7          : 0        |                                        |
+         8 -> 15         : 0        |                                        |
+        16 -> 31         : 0        |                                        |
+        32 -> 63         : 0        |                                        |
+        64 -> 127        : 0        |                                        |
+       128 -> 255        : 0        |                                        |
+       256 -> 511        : 1        |*****                                   |
+       512 -> 1023       : 1        |*****                                   |
+      1024 -> 2047       : 8        |****************************************|
+Register query = MTMP (0x900a)
+     usecs               : count    distribution
+         0 -> 1          : 0        |                                        |
+         2 -> 3          : 0        |                                        |
+         4 -> 7          : 0        |                                        |
+         8 -> 15         : 0        |                                        |
+        16 -> 31         : 0        |                                        |
+        32 -> 63         : 0        |                                        |
+        64 -> 127        : 0        |                                        |
+       128 -> 255        : 0        |                                        |
+       256 -> 511        : 0        |                                        |
+       512 -> 1023       : 1        |****************************************|
+
+Using the -r option it is possible to trace only a selected register as
+opposed to all registers. For example:
+
+# ./emadlatency -r PPCNT
+Tracing EMADs... Hit Ctrl-C to end.
+^C
+Register query = PPCNT (0x5008)
+     usecs               : count    distribution
+         0 -> 1          : 0        |                                        |
+         2 -> 3          : 0        |                                        |
+         4 -> 7          : 0        |                                        |
+         8 -> 15         : 0        |                                        |
+        16 -> 31         : 0        |                                        |
+        32 -> 63         : 0        |                                        |
+        64 -> 127        : 0        |                                        |
+       128 -> 255        : 0        |                                        |
+       256 -> 511        : 2        |**                                      |
+       512 -> 1023       : 39       |****************************************|
+      1024 -> 2047       : 1        |*                                       |
+
+It is also possible to specify the register's numeric identifier in case its
+name is not recognized by the program. For example:
+
+# ./emadlatency -r 0x5008
+Tracing EMADs... Hit Ctrl-C to end.
+^C
+Register query = PPCNT (0x5008)
+     usecs               : count    distribution
+         0 -> 1          : 0        |                                        |
+         2 -> 3          : 0        |                                        |
+         4 -> 7          : 0        |                                        |
+         8 -> 15         : 0        |                                        |
+        16 -> 31         : 0        |                                        |
+        32 -> 63         : 0        |                                        |
+        64 -> 127        : 0        |                                        |
+       128 -> 255        : 0        |                                        |
+       256 -> 511        : 1        |*                                       |
+       512 -> 1023       : 39       |****************************************|
+      1024 -> 2047       : 2        |**                                      |
+
+When the -a option is specified a more verbose output is displayed,
+which also includes the average latency. For example:
+
+# ./emadlatency -r SFN -a
+Tracing EMADs... Hit Ctrl-C to end.
+^C
+Register query = SFN (0x200b)
+ average = 1600 usecs, total = 12801 usecs, count = 8
+     usecs               : count    distribution
+         0 -> 1          : 0        |                                        |
+         2 -> 3          : 0        |                                        |
+         4 -> 7          : 0        |                                        |
+         8 -> 15         : 0        |                                        |
+        16 -> 31         : 0        |                                        |
+        32 -> 63         : 0        |                                        |
+        64 -> 127        : 0        |                                        |
+       128 -> 255        : 0        |                                        |
+       256 -> 511        : 1        |*****                                   |
+       512 -> 1023       : 0        |                                        |
+      1024 -> 2047       : 7        |****************************************|
+
+USAGE message:
+
+# ./emadlatency --help
+Usage: emadlatency [OPTION...]
+Summarize EMAD latency as a histogram.
+
+USAGE: emadlatency [--help] [-T] [-m] [-r] [-q] [-w] [-a] [-v] [interval] [count]
+
+EXAMPLES:
+    emadlatency             # summarize EMAD latency as a histogram
+    emadlatency 1 10        # print 1 second summaries, 10 times
+    emadlatency -mT 1       # 1s summaries, milliseconds, and timestamps
+    emadlatency -r SFN      # measure latency of SFN EMADs only
+    emadlatency -q          # only show latency of EMAD queries
+    emadlatency -w          # only show latency of EMAD writes
+    emadlatency -a          # also show average latency
+
+  -a, --average              Also show average latency
+  -m, --milliseconds         Millisecond histogram
+  -q, --query                Show latency of EMAD queries only
+  -r, --register=REG         Trace this register only
+  -T, --timestamp            Include timestamp on output
+  -v, --verbose              Verbose debug output
+  -w, --write                Show latency of EMAD writes only
+  -?, --help                 Give this help list
+      --usage                Give a short usage message
+  -V, --version              Print program version
+
+Mandatory or optional arguments to long options are also mandatory or optional
+for any corresponding short options.
+
+Report bugs to <mlxsw@nvidia.com>.
