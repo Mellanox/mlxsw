@@ -9,7 +9,7 @@ INCLUDES := -I$(OUTPUT)
 CFLAGS := -g -Wall
 ARCH := $(shell uname -m | sed 's/x86_64/x86/')
 
-APPS = emadlatency
+APPS = emadlatency emadump
 
 COMMON_OBJ = \
 	$(OUTPUT)/trace_helpers.o \
@@ -77,9 +77,13 @@ $(OUTPUT)/%.o: %.c $(wildcard %.h) | $(OUTPUT)
 	$(Q)$(CC) $(CFLAGS) $(INCLUDES) -c $(filter %.c,$^) -o $@
 
 # Build application binary
-$(APPS): %: $(OUTPUT)/%.o $(LIBBPF_OBJ) $(COMMON_OBJ) | $(OUTPUT)
+emadlatency: %: $(OUTPUT)/%.o $(LIBBPF_OBJ) $(COMMON_OBJ) | $(OUTPUT)
 	$(call msg,BINARY,$@)
 	$(Q)$(CC) $(CFLAGS) $^ -lelf -lz -o $@
+
+emadump: %: $(OUTPUT)/%.o $(LIBBPF_OBJ) $(COMMON_OBJ) | $(OUTPUT)
+	$(call msg,BINARY,$@)
+	$(Q)$(CC) $(CFLAGS) $^ -lelf -lz -lpcap -o $@
 
 # delete failed targets
 .DELETE_ON_ERROR:

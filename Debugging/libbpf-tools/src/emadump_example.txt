@@ -1,0 +1,61 @@
+Demonstration of emadump.
+
+EMADs (Ethernet Management Datagrams) are configuration packets
+exchanged between the mlxsw driver and the underlying device/firmware
+over a bus such as PCI or I2C. These packets are similar in nature to
+the netlink packets exchanged between user space and kernel.
+
+Each EMAD transaction initiated by the driver encodes a single register
+and is either a request to write to the register or a request to query
+from it.
+
+emadump traces EMADs and dumps them to a PCAP file. By default, EMADs
+are dumped to stdout, making it easy to pipe EMADs to Wireshark. For
+example:
+
+# ./emadump | tshark -X lua_script:../../EMADs/emad_dissector.lua -r -
+    1   0.000000 Mellanox_01:02:03 _ Mellanox_00:00:01 EMAD 1212 Ethernet II
+    2   0.000513 Mellanox_01:02:03 _ Mellanox_00:00:01 EMAD 1212 Ethernet II
+
+Alternatively, EMADs can be dumped to a file for later inspection. For
+example:
+
+# ./emadump -f emads.pcap
+
+It is also possible to filter only EMADs (request and response) that
+took longer than a specified threshold in microseconds. For example:
+
+# ./emadump -l 1000 -f emads.pcap
+
+Finally, it is also possible to filter only EMADs that encountered some error
+during processing. For example:
+
+# ./emadump -e -f emads.pcap
+
+USAGE message:
+
+# ./emadump --help
+Usage: emadump [OPTION...]
+Dump EMADs to a PCAP file.
+
+USAGE: emadump [--help] [-e] [-l] [-f] [-v]
+
+EXAMPLES:
+    emadump                # dump all EMADs to stdout
+    emadump -e             # only dump EMADs (request & response) with errors
+    emadump -l 1000        # only dump EMADs that took longer than 1000 usecs
+    emadump -f emads.pcap  # dump EMADs to emads.pcap instead of stdout
+
+  -e, --errors               Only dump EMADs with errors
+  -f, --file=FILE            Dump EMADs to this file
+  -l, --latency=LAT          Only dump EMADs that took longer than specified
+                             threshold in microseconds
+  -v, --verbose              Verbose debug output
+  -?, --help                 Give this help list
+      --usage                Give a short usage message
+  -V, --version              Print program version
+
+Mandatory or optional arguments to long options are also mandatory or optional
+for any corresponding short options.
+
+Report bugs to <mlxsw@nvidia.com>.

@@ -8,6 +8,7 @@ observability and debuggability of mlxsw. The tools are written using
 ## List of tools
 
 emadlatency: Summarize EMAD latency as a histogram. [Examples](src/emadlatency_example.txt)
+emadump: Dump EMADs to a PCAP file. [Examples](src/emadump_example.txt)
 
 ## Building
 
