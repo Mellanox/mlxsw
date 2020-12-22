@@ -1,0 +1,107 @@
+Demonstration of trapagg.
+
+Devices capable of offloading the kernel’s datapath and perform
+functions such as bridging and routing must also be able to send
+specific packets to the kernel (i.e., the CPU) for processing. The
+fundamental ability of sending certain packets to the kernel for
+processing is called “packet trapping”.
+
+The devlink-trap [1] mechanism allows capable device drivers to register
+their supported packet traps with devlink and report trapped packets to
+devlink for further analysis.
+
+trapagg traces trapped packets and stores per-{trap, flow} statistics in
+a BPF map. This is achieved by attaching a BPF program to the
+'devlink_trap_report' tracepoint, which is triggered whenever a packet
+trap is received. The aggregated statistics can then be read from user
+space. For example:
+
+# ./trapagg
+Tracing packet traps... Hit Ctrl-C to end.
+^C
+
+TRAP                                     SIP                       DIP                       SPORT      DPORT      IP_PROTO   IS_ENCAP
+ingress_vlan_filter                      192.0.2.1                 192.0.2.2                 12345      3131       17         0          1247
+ingress_vlan_filter                      192.0.2.1                 192.0.2.2                 12345      44         17         0          1440
+
+It is possible to only trace packet traps of a specific type. For
+example, to only trace control traps:
+
+# ./trapagg -c
+Tracing packet traps... Hit Ctrl-C to end.
+^C
+
+TRAP                                     SIP                       DIP                       SPORT      DPORT      IP_PROTO   IS_ENCAP
+ipv6_neigh_solicit                       ::                        ff02::1:ff00:2            0          0          58         0          1
+mld_v2_report                            ::                        ff02::16                  0          0          0          0          2
+ipv6_neigh_solicit                       2001:db8:1::2             ff02::1:ff00:1            0          0          58         0          1
+local_route                              2001:db8:1::2             2001:db8:1::1             0          0          58         0          4
+local_route                              192.0.2.2                 192.0.2.1                 0          0          1          0          186
+
+Upon termination of the trapagg process, the file descriptor associated
+with the trace event will be closed and the BPF program will be detached
+from the tracepoint. This is inconvenient in case user space wants
+to have the BPF program aggregating statistics for a long time and to
+only read them periodically. The solution is to pin both the BPF map and
+the BPF link [2] to the BPF file system [4]. For example:
+
+# ./trapagg -p
+# ./trapagg -s
+
+TRAP                                     SIP                       DIP                       SPORT      DPORT      IP_PROTO   IS_ENCAP
+ipv6_neigh_advert                        2001:db8:1::2             fe80::7efe:90ff:feff:27d1 0          0          58         0          1
+local_route                              2001:db8:1::2             2001:db8:1::1             0          0          58         0          11
+ingress_vlan_filter                      192.0.2.1                 192.0.2.2                 12345      3131       17         0          1595
+
+These aggregated statistics can then be exported to Prometheus [5] using
+trapagg-exporter.py:
+
+# ./trapagg-exporter.py -l 0.0.0.0:9432
+
+The aggregated statistics are then available over HTTP for the
+Prometheus to periodically query:
+
+# HELP node_net_trapagg_total Aggregated trap data
+# TYPE node_net_trapagg_total counter
+node_net_trapagg_total{dip="fe80::7efe:90ff:feff:27d1",dport="0",ip_proto="58",is_encap="0",sip="2001:db8:1::2",sport="0",trap="ipv6_neigh_advert"} 6.0
+node_net_trapagg_total{dip="2001:db8:1::1",dport="0",ip_proto="58",is_encap="0",sip="2001:db8:1::2",sport="0",trap="local_route"} 11.0
+node_net_trapagg_total{dip="192.0.2.2",dport="3131",ip_proto="17",is_encap="0",sip="192.0.2.1",sport="12345",trap="ingress_vlan_filter"} 6817.0
+
+USAGE message:
+
+# ./trapagg --help
+Usage: trapagg [OPTION...]
+Dump aggregated per-{trap, flow} statistics.
+
+USAGE: trapagg [--help] [-d] [-e] [-c] [-p] [-u] [-s] [-T] [-v] [interval]
+[count]
+
+EXAMPLES:
+    trapagg                 # dump aggregated per-{trap, flow} statistics
+    trapagg -d              # dump aggregated statistics of drop traps only
+    trapagg -p              # pin BPF objects and exit
+    trapagg -u              # unpin BPF objects and exit
+    trapagg -s              # dump statistics from pinned objects and exit
+    trapagg 1 10            # print 1 second summaries, 10 times
+    trapagg -T 1            # 1s summaries with timestamps
+
+  -c, --control              Trace control traps only
+  -d, --drop                 Trace drop traps only
+  -e, --exception            Trace exception traps only
+  -p, --pin                  Pin BPF objects and exit
+  -s, --stats                Dump aggregated statistics from pinned objects and
+                             exit
+  -T, --timestamp            Include timestamp on output
+  -u, --unpin                Unpin BPF objects and exit
+  -v, --verbose              Verbose debug output
+  -?, --help                 Give this help list
+      --usage                Give a short usage message
+  -V, --version              Print program version
+
+Report bugs to <mlxsw@nvidia.com>.
+
+[1] https://www.kernel.org/doc/html/latest/networking/devlink/devlink-trap.html
+[2] https://lore.kernel.org/netdev/20200228223948.360936-1-andriin@fb.com/
+[3] https://facebookmicrosites.github.io/bpf/blog/2018/08/31/object-lifetime.html#bpffs
+[4] https://docs.cilium.io/en/v1.6/kubernetes/requirements/#mounted-bpf-filesystem
+[5] https://prometheus.io/
