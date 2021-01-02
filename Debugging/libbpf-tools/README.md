@@ -7,9 +7,9 @@ observability and debuggability of mlxsw. The tools are written using
 
 ## List of tools
 
-emadlatency: Summarize EMAD latency as a histogram. [Examples](src/emadlatency_example.txt)
-emadump: Dump EMADs to a PCAP file. [Examples](src/emadump_example.txt)
-trapagg: Dump aggregated per-{trap, flow} statistics. [Examples](src/trapagg_example.txt)
+* emadlatency: Summarize EMAD latency as a histogram. [Examples](src/emadlatency_example.txt)
+* emadump: Dump EMADs to a PCAP file. [Examples](src/emadump_example.txt)
+* trapagg: Dump aggregated per-{trap, flow} statistics. [Examples](src/trapagg_example.txt)
 
 ## Building
 
