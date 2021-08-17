@@ -410,6 +410,119 @@ int resmon_jrpc_dissect_params_empty(struct json_object *obj,
 	return resmon_jrpc_dissect(obj, NULL, NULL, NULL, 0, error);
 }
 
+static int
+resmon_jrpc_dissect_stats_gauge(struct json_object *gauge_obj,
+				struct resmon_jrpc_gauge *pgauge,
+				char **error)
+{
+	enum {
+		pol_id,
+		pol_descr,
+		pol_value,
+		pol_capacity,
+	};
+	struct resmon_jrpc_policy policy[] = {
+		[pol_id] =	 { .key = "name", .type = json_type_string,
+				   .required = true },
+		[pol_descr] =	 { .key = "descr", .type = json_type_string,
+				   .required = true },
+		[pol_value] =	 { .key = "value", .type = json_type_int,
+				   .required = true },
+		[pol_capacity] = { .key = "capacity", .type = json_type_int,
+				   .required = true },
+	};
+	struct json_object *values[ARRAY_SIZE(policy)] = {};
+	bool seen[ARRAY_SIZE(policy)] = {};
+	int64_t capacity;
+	int err;
+
+	err = resmon_jrpc_dissect(gauge_obj, policy, seen, values,
+				  ARRAY_SIZE(policy), error);
+	if (err)
+		return err;
+
+	capacity = json_object_get_int64(values[pol_capacity]);
+	if (capacity < 0) {
+		resmon_fmterr(error, "Invalid capacity < 0");
+		return -1;
+	}
+
+	*pgauge = (struct resmon_jrpc_gauge) {
+		.descr = json_object_get_string(values[pol_descr]),
+		.value = json_object_get_int64(values[pol_value]),
+		.capacity = capacity,
+	};
+	return 0;
+}
+
+static int
+resmon_jrpc_dissect_stats_gauges(struct json_object *gauges_array,
+				 struct resmon_jrpc_gauge **pgauges,
+				 size_t *pnum_gauges, char **error)
+{
+	size_t gauges_array_len = json_object_array_length(gauges_array);
+	struct resmon_jrpc_gauge *gauges;
+
+	gauges = calloc(gauges_array_len, sizeof(*gauges));
+	if (gauges == NULL) {
+		resmon_fmterr(error, "Couldn't allocate gauges: %m");
+		return -1;
+	}
+
+	for (size_t i = 0; i < gauges_array_len; i++) {
+		struct json_object *gauge_obj =
+			json_object_array_get_idx(gauges_array, i);
+		struct resmon_jrpc_gauge *gauge = &gauges[i];
+		int err;
+
+		err = resmon_jrpc_dissect_stats_gauge(gauge_obj, gauge, error);
+		if (err != 0)
+			goto free_gauges;
+	}
+
+	*pgauges = gauges;
+	*pnum_gauges = gauges_array_len;
+	return 0;
+
+free_gauges:
+	free(gauges);
+	return -1;
+}
+
+int resmon_jrpc_dissect_stats(struct json_object *obj,
+			      struct resmon_jrpc_gauge **gauges,
+			      size_t *num_gauges,
+			      char **error)
+{
+	/* Result for query with "stats" method is supposed to look like:
+	 *
+	 * { { "gauges": [ { "id": a, "descr": "b",
+	 *                     "value": c, "capacity": d },
+	 *                 { "id": e, "descr": "u", ... },
+	 *                   ...
+	 *               ] } }
+	 */
+	enum {
+		pol_gauges,
+	};
+	struct resmon_jrpc_policy policy[] = {
+		[pol_gauges] = { .key = "gauges", .type = json_type_array,
+				 .required = true },
+	};
+	struct json_object *values[ARRAY_SIZE(policy)] = {};
+	bool seen[ARRAY_SIZE(policy)] = {};
+	int err;
+
+	err = resmon_jrpc_dissect(obj, policy, seen, values,
+				  ARRAY_SIZE(policy), error);
+	if (err)
+		return err;
+
+	return resmon_jrpc_dissect_stats_gauges(values[pol_gauges],
+						gauges, num_gauges,
+						error);
+}
+
 int resmon_jrpc_send(struct resmon_sock *sock, struct json_object *obj)
 {
 	const char *str;

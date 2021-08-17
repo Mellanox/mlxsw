@@ -45,6 +45,8 @@ int resmon_sock_recv(struct resmon_sock *sock,
 /* resmon-jrpc.c */
 
 enum resmon_jrpc_e {
+	resmon_jrpc_e_capacity = -1,
+
 	resmon_jrpc_e_inv_request = -32600,
 	resmon_jrpc_e_method_nf = -32601,
 	resmon_jrpc_e_inv_params = -32602,
@@ -90,12 +92,47 @@ int resmon_jrpc_dissect_error(struct json_object *obj,
 int resmon_jrpc_dissect_params_empty(struct json_object *obj,
 				     char **error);
 
+struct resmon_jrpc_gauge {
+	const char *descr;
+	int64_t value;
+	uint64_t capacity;
+};
+int resmon_jrpc_dissect_stats(struct json_object *obj,
+			      struct resmon_jrpc_gauge **gauges,
+			      size_t *num_gauges,
+			      char **error);
+
 int resmon_jrpc_send(struct resmon_sock *sock, struct json_object *obj);
 
 /* resmon-c.c */
 
 int resmon_c_ping(int argc, char **argv);
 int resmon_c_stop(int argc, char **argv);
+int resmon_c_stats(int argc, char **argv);
+
+/* resmon-stat.c */
+
+#define RESMON_RSRC_EXPAND_AS_ENUM(NAME, DESCRIPTION) \
+	RESMON_RSRC_ ## NAME,
+#define RESMON_RSRC_EXPAND_AS_PLUS1(...) + 1
+
+#define RESMON_RESOURCES(X)
+
+enum {
+	resmon_resource_count =
+		0 RESMON_RESOURCES(RESMON_RSRC_EXPAND_AS_PLUS1)
+};
+
+struct resmon_stat;
+
+struct resmon_stat_gauges {
+	int64_t values[resmon_resource_count];
+	int64_t total;
+};
+
+struct resmon_stat *resmon_stat_create(void);
+void resmon_stat_destroy(struct resmon_stat *stat);
+struct resmon_stat_gauges resmon_stat_gauges(struct resmon_stat *stat);
 
 /* resmon-back.c */
 
@@ -107,10 +144,16 @@ extern const struct resmon_back_cls resmon_back_cls_mock;
 struct resmon_back *resmon_back_init(const struct resmon_back_cls *cls);
 void resmon_back_fini(struct resmon_back *back);
 
+int resmon_back_get_capacity(struct resmon_back *back, uint64_t *capacity,
+			     char **error);
+
 /* resmon-d.c */
 
 int resmon_d_start(int argc, char **argv);
 
+void resmon_d_respond_error(struct resmon_sock *ctl,
+			    struct json_object *id, int code,
+			    const char *message, const char *data);
 void resmon_d_respond_invalid_params(struct resmon_sock *ctl,
 				     struct json_object *id,
 				     const char *data);

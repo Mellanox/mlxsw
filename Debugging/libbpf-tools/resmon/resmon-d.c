@@ -52,6 +52,14 @@ static void __resmon_d_respond(struct resmon_sock *ctl,
 	}
 }
 
+void resmon_d_respond_error(struct resmon_sock *ctl,
+			    struct json_object *id, int code,
+			    const char *message, const char *data)
+{
+	__resmon_d_respond(ctl,
+			   resmon_jrpc_new_error(id, code, message, data));
+}
+
 void resmon_d_respond_invalid_params(struct resmon_sock *ctl,
 				     struct json_object *id,
 				     const char *data)
@@ -131,7 +139,157 @@ put_obj:
 	resmon_d_respond_memerr(peer, id);
 }
 
+#define RESMON_RSRC_EXPAND_AS_DESC(NAME, DESCRIPTION) \
+	[RESMON_RSRC_ ## NAME] = DESCRIPTION,
+#define RESMON_RSRC_EXPAND_AS_NAME_STR(NAME, DESCRIPTION) \
+	[RESMON_RSRC_ ## NAME] = #NAME,
+
+static const char *const resmon_d_gauge_descriptions[] = {
+	RESMON_RESOURCES(RESMON_RSRC_EXPAND_AS_DESC)
+};
+
+static const char *const resmon_d_gauge_names[] = {
+	RESMON_RESOURCES(RESMON_RSRC_EXPAND_AS_NAME_STR)
+};
+
+#undef RESMON_RSRC_EXPAND_AS_NAME_STR
+#undef RESMON_RSRC_EXPAND_AS_DESC
+
+static int resmon_d_stats_attach_gauge(struct json_object *gauges_obj,
+				       const char *name, const char *descr,
+				       int64_t value, uint64_t capacity)
+{
+	struct json_object *gauge_obj;
+	int rc;
+
+	gauge_obj = json_object_new_object();
+	if (gauge_obj == NULL)
+		return -1;
+
+	rc = resmon_jrpc_object_add_str(gauge_obj, "name", name);
+	if (rc != 0)
+		goto put_gauge_obj;
+
+	rc = resmon_jrpc_object_add_str(gauge_obj, "descr", descr);
+	if (rc != 0)
+		goto put_gauge_obj;
+
+	rc = resmon_jrpc_object_add_int(gauge_obj, "value", value);
+	if (rc != 0)
+		goto put_gauge_obj;
+
+	rc = resmon_jrpc_object_add_int(gauge_obj, "capacity", capacity);
+	if (rc != 0)
+		goto put_gauge_obj;
+
+	rc = json_object_array_add(gauges_obj, gauge_obj);
+	if (rc)
+		goto put_gauge_obj;
+
+	return 0;
+
+put_gauge_obj:
+	json_object_put(gauge_obj);
+	return -1;
+}
+
+static void resmon_d_handle_stats(struct resmon_back *back,
+				  struct resmon_stat *stat,
+				  struct resmon_sock *peer,
+				  struct json_object *params_obj,
+				  struct json_object *id)
+{
+	struct resmon_stat_gauges gauges;
+	struct json_object *gauges_obj;
+	struct json_object *result_obj;
+	struct json_object *obj;
+	uint64_t capacity;
+	char *error;
+	int rc;
+
+	/* The response is as follows:
+	 *
+	 * {
+	 *     "id": ...,
+	 *     "result": {
+	 *         "gauges": [
+	 *             {
+	 *                 "name": symbolic gauge enum name,
+	 *                 "description": string with human-readable descr.,
+	 *                 "value": integer, value of the gauge
+	 *             },
+	 *             ....
+	 *         ]
+	 *     }
+	 * }
+	 */
+
+	rc = resmon_jrpc_dissect_params_empty(params_obj, &error);
+	if (rc) {
+		resmon_d_respond_invalid_params(peer, id, error);
+		free(error);
+		return;
+	}
+
+	rc = resmon_back_get_capacity(back, &capacity, &error);
+	if (rc != 0) {
+		resmon_d_respond_error(peer, id, resmon_jrpc_e_capacity,
+				       "Issue while retrieving capacity", error);
+		free(error);
+		return;
+	}
+
+	obj = resmon_jrpc_new_object(id);
+	if (obj == NULL)
+		return;
+
+	result_obj = json_object_new_object();
+	if (result_obj == NULL)
+		goto put_obj;
+
+	gauges_obj = json_object_new_array();
+	if (gauges_obj == NULL)
+		goto put_result_obj;
+
+	gauges = resmon_stat_gauges(stat);
+	for (int i = 0; i < ARRAY_SIZE(gauges.values); i++) {
+		rc = resmon_d_stats_attach_gauge(gauges_obj,
+					    resmon_d_gauge_names[i],
+					    resmon_d_gauge_descriptions[i],
+					    gauges.values[i],
+					    capacity);
+		if (rc)
+			goto put_gauges_obj;
+	}
+
+	rc = resmon_d_stats_attach_gauge(gauges_obj, "TOTAL", "Total",
+					 gauges.total, capacity);
+	if (rc)
+		goto put_gauges_obj;
+
+	rc = json_object_object_add(result_obj, "gauges", gauges_obj);
+	if (rc != 0)
+		goto put_gauges_obj;
+
+	rc = json_object_object_add(obj, "result", result_obj);
+	if (rc != 0)
+		goto put_result_obj;
+
+	resmon_jrpc_send(peer, obj);
+	json_object_put(obj);
+	return;
+
+put_gauges_obj:
+	json_object_put(gauges_obj);
+put_result_obj:
+	json_object_put(result_obj);
+put_obj:
+	json_object_put(obj);
+	resmon_d_respond_memerr(peer, id);
+}
+
 static void resmon_d_handle_method(struct resmon_back *back,
+				   struct resmon_stat *stat,
 				   struct resmon_sock *peer,
 				   const char *method,
 				   struct json_object *params_obj,
@@ -143,6 +301,9 @@ static void resmon_d_handle_method(struct resmon_back *back,
 	} else if (strcmp(method, "ping") == 0) {
 		resmon_d_handle_ping(peer, params_obj, id);
 		return;
+	} else if (strcmp(method, "stats") == 0) {
+		resmon_d_handle_stats(back, stat, peer, params_obj, id);
+		return;
 	}
 
 	__resmon_d_respond(peer,
@@ -150,6 +311,7 @@ static void resmon_d_handle_method(struct resmon_back *back,
 }
 
 static int resmon_d_ctl_activity(struct resmon_back *back,
+				 struct resmon_stat *stat,
 				 struct resmon_sock *ctl)
 {
 	struct json_object *request_obj;
@@ -181,7 +343,7 @@ static int resmon_d_ctl_activity(struct resmon_back *back,
 		goto put_req_obj;
 	}
 
-	resmon_d_handle_method(back, &peer, method, params, id);
+	resmon_d_handle_method(back, stat, &peer, method, params, id);
 
 put_req_obj:
 	json_object_put(request_obj);
@@ -190,7 +352,8 @@ free_req:
 	return 0;
 }
 
-static int resmon_d_loop_sock(struct resmon_back *back, struct resmon_sock *ctl)
+static int resmon_d_loop_sock(struct resmon_back *back, struct resmon_stat *stat,
+			      struct resmon_sock *ctl)
 {
 	int err = 0;
 	enum {
@@ -230,7 +393,8 @@ static int resmon_d_loop_sock(struct resmon_back *back, struct resmon_sock *ctl)
 			if (pollfd->revents & POLLIN) {
 				switch (i) {
 				case pollfd_ctl:
-					err = resmon_d_ctl_activity(back, ctl);
+					err = resmon_d_ctl_activity(back, stat,
+								    ctl);
 					if (err != 0)
 						goto out;
 					break;
@@ -243,7 +407,7 @@ out:
 	return err;
 }
 
-static int resmon_d_loop(struct resmon_back *back)
+static int resmon_d_loop(struct resmon_back *back, struct resmon_stat *stat)
 {
 	struct resmon_sock ctl;
 	int err;
@@ -258,7 +422,7 @@ static int resmon_d_loop(struct resmon_back *back)
 
 	sd_notify(0, "READY=1");
 
-	err = resmon_d_loop_sock(back, &ctl);
+	err = resmon_d_loop_sock(back, stat, &ctl);
 
 	resmon_sock_close_d(&ctl);
 	return err;
@@ -267,18 +431,25 @@ static int resmon_d_loop(struct resmon_back *back)
 static int resmon_d_do_start(const struct resmon_back_cls *back_cls)
 {
 	struct resmon_back *back;
+	struct resmon_stat *stat;
 	int err = 0;
+
+	stat = resmon_stat_create();
+	if (stat == NULL)
+		return -1;
 
 	back = resmon_back_init(back_cls);
 	if (back == NULL)
-		return -1;
+		goto destroy_stat;
 
 	openlog("resmon", LOG_PID | LOG_CONS, LOG_USER);
 
-	err = resmon_d_loop(back);
+	err = resmon_d_loop(back, stat);
 
 	closelog();
 	resmon_back_fini(back);
+destroy_stat:
+	resmon_stat_destroy(stat);
 	return err;
 }
 

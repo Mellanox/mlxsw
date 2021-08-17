@@ -262,3 +262,81 @@ int resmon_c_stop(int argc, char **argv)
 
 	return resmon_c_stop_jrpc();
 }
+
+static void resmon_c_stats_help(void)
+{
+	fprintf(stderr,
+		"Usage: resmon stats\n"
+		"\n"
+	);
+}
+
+static void resmon_c_stats_print(struct resmon_jrpc_gauge *gauges,
+				 size_t num_gauges)
+{
+	fprintf(stderr, "%-30s%s\n", "Resource", "Usage");
+
+	for (size_t i = 0; i < num_gauges; i++)
+		fprintf(stderr, "%-30s%" PRId64 " / %" PRIu64 " (%" PRIu64 "%%)\n",
+			gauges[i].descr, gauges[i].value,
+			gauges[i].capacity,
+			gauges[i].value * 100 / gauges[i].capacity);
+}
+
+static int resmon_c_stats_jrpc(void)
+{
+	struct resmon_jrpc_gauge *gauges;
+	struct json_object *response;
+	struct json_object *request;
+	struct json_object *result;
+	size_t num_gauges;
+	const int id = 1;
+	char *error;
+	int err = 0;
+
+	request = resmon_jrpc_new_request(id, "stats");
+	if (request == NULL)
+		return -1;
+
+	response = resmon_c_send_request(request);
+	if (response == NULL) {
+		err = -1;
+		goto put_request;
+	}
+
+	if (!resmon_c_handle_response(response, id, json_type_object,
+				      &result)) {
+		err = -1;
+		goto put_response;
+	}
+
+	err = resmon_jrpc_dissect_stats(result, &gauges, &num_gauges,
+					&error);
+	if (err != 0) {
+		fprintf(stderr, "Invalid gauges object: %s\n", error);
+		free(error);
+		goto put_result;
+	}
+
+	resmon_c_stats_print(gauges, num_gauges);
+
+	free(gauges);
+put_result:
+	json_object_put(result);
+put_response:
+	json_object_put(response);
+put_request:
+	json_object_put(request);
+	return err;
+}
+
+int resmon_c_stats(int argc, char **argv)
+{
+	int err;
+
+	err = resmon_c_cmd_noargs(argc, argv, resmon_c_stats_help);
+	if (err != 0)
+		return err;
+
+	return resmon_c_stats_jrpc();
+}

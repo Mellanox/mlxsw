@@ -13,6 +13,7 @@ resmon-OBJECTS :=		\
 	$(OUTPUT)/resmon-d.o	\
 	$(OUTPUT)/resmon-jrpc.o	\
 	$(OUTPUT)/resmon-sock.o	\
+	$(OUTPUT)/resmon-stat.o	\
 	#
 SYSTEMD_UNITS :=				\
 	$(OUTPUT)/resmon.service		\
