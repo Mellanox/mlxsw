@@ -124,7 +124,13 @@ int resmon_c_stats(int argc, char **argv);
 	RESMON_RSRC_ ## NAME,
 #define RESMON_RSRC_EXPAND_AS_PLUS1(...) + 1
 
-#define RESMON_RESOURCES(X)
+#define RESMON_RESOURCES(X) \
+	X(LPM_IPV4, "IPv4 LPM") \
+	X(LPM_IPV6, "IPv6 LPM")
+
+enum resmon_resource {
+	RESMON_RESOURCES(RESMON_RSRC_EXPAND_AS_ENUM)
+};
 
 enum {
 	resmon_resource_count =
@@ -138,9 +144,30 @@ struct resmon_stat_gauges {
 	int64_t total;
 };
 
+struct resmon_stat_dip {
+	uint8_t dip[16];
+};
+
+struct resmon_stat_kvd_alloc {
+	unsigned int slots;
+	enum resmon_resource resource;
+};
+
 struct resmon_stat *resmon_stat_create(void);
 void resmon_stat_destroy(struct resmon_stat *stat);
 struct resmon_stat_gauges resmon_stat_gauges(struct resmon_stat *stat);
+
+int resmon_stat_ralue_update(struct resmon_stat *stat,
+			     enum mlxsw_reg_ralxx_protocol protocol,
+			     uint8_t prefix_len,
+			     uint16_t virtual_router,
+			     struct resmon_stat_dip dip,
+			     struct resmon_stat_kvd_alloc kvda);
+int resmon_stat_ralue_delete(struct resmon_stat *stat,
+			     enum mlxsw_reg_ralxx_protocol protocol,
+			     uint8_t prefix_len,
+			     uint16_t virtual_router,
+			     struct resmon_stat_dip dip);
 
 /* resmon-reg.c */
 
