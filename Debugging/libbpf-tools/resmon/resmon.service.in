@@ -1,0 +1,7 @@
+[Unit]
+Description=mlxsw resource monitor
+
+[Service]
+Type=notify
+ExecStart=@BINDIR@/resmon start
+ExecStop=@BINDIR@/resmon stop

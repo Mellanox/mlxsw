@@ -2,13 +2,19 @@
 REL_SRCDIR := .
 include $(REL_SRCDIR)/common.mk
 
-DIRS = common src
+DIRS = common src resmon
 
 .PHONY: all
 all: $(DIRS:%=build-%)
 
 build-%:
 	$(Q)$(MAKE) -C $*
+
+.PHONY: install
+install: install-resmon
+
+install-%:
+	$(Q)$(MAKE) -C $* install
 
 .PHONY: clean
 clean: $(DIRS:%=clean-%)

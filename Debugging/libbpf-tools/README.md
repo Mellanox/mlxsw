@@ -10,6 +10,7 @@ observability and debuggability of mlxsw. The tools are written using
 * src/emadlatency: Summarize EMAD latency as a histogram. [Examples](src/emadlatency_example.txt)
 * src/emadump: Dump EMADs to a PCAP file. [Examples](src/emadump_example.txt)
 * src/trapagg: Dump aggregated per-{trap, flow} statistics. [Examples](src/trapagg_example.txt)
+* resmon/resmon: Monitor resource consumption in Spectrum switches.
 
 ## Building
 
@@ -42,6 +43,42 @@ Or cherry-pick what should be built:
 ```shell
 $ make -C src
 $ make -C src emadump
+$ make -C resmon
+$ make -C resmon resmon
+```
+
+Some tools support installation. For those that do, the build system can be
+configured by passing variables describing the directory layout of the system
+where tools will be installed.
+
+```shell
+$ make PREFIX=/usr LOCALSTATEDIR=/var
+```
+
+## Installation
+
+Some tools support installation. To install all that do, run:
+
+```shell
+$ make install
+```
+
+It is also possible to cherry-pick installation of a certain tool:
+
+```shell
+$ make -C resmon install
+```
+
+Remember to pass the directory-layout variables to install as well:
+
+```shell
+$ make PREFIX=/usr LOCALSTATEDIR=/var install
+```
+
+The build system also supports staged installations, e.g.:
+
+```shell
+$ make PREFIX=/usr LOCALSTATEDIR=/var DESTDIR=${HOME}/tmp/ install
 ```
 
 ## Further resources
