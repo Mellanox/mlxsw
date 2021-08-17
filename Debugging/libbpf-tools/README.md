@@ -13,6 +13,20 @@ observability and debuggability of mlxsw. The tools are written using
 
 ## Building
 
+Before building any of libbpf-tools, the system needs to have the following
+tools installed:
+
+- clang
+- llvm-strip
+
+Besides this, BPF-based tools need the kernel that they are running on to
+be configured with BTF (BPF Type Format) annotations:
+
+- `CONFIG_DEBUG_INFO_BTF=y`
+
+Then to prepare the source tree for building, first check out the libbpf
+submodule:
+
 ```shell
 $ git submodule update --init --recursive       # check out libbpf
 ```
