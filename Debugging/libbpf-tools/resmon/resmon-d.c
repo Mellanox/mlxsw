@@ -304,6 +304,9 @@ static void resmon_d_handle_method(struct resmon_back *back,
 	} else if (strcmp(method, "stats") == 0) {
 		resmon_d_handle_stats(back, stat, peer, params_obj, id);
 		return;
+	} else if (resmon_back_handle_method(back, stat, method,
+					     peer, params_obj, id)) {
+		return;
 	}
 
 	__resmon_d_respond(peer,

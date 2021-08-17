@@ -6,6 +6,8 @@
 #include <sys/un.h>
 #include <json-c/json_object.h>
 
+#include "mlxsw.h"
+
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(*(x)))
 
 #define NEXT_ARG() do { argv++; if (--argc <= 0) goto incomplete_command; } while (0)
@@ -46,6 +48,7 @@ int resmon_sock_recv(struct resmon_sock *sock,
 
 enum resmon_jrpc_e {
 	resmon_jrpc_e_capacity = -1,
+	resmon_jrpc_e_reg_process_emad = -2,
 
 	resmon_jrpc_e_inv_request = -32600,
 	resmon_jrpc_e_method_nf = -32601,
@@ -91,6 +94,10 @@ int resmon_jrpc_dissect_error(struct json_object *obj,
 			      char **error);
 int resmon_jrpc_dissect_params_empty(struct json_object *obj,
 				     char **error);
+int resmon_jrpc_dissect_params_emad(struct json_object *obj,
+				    const char **payload,
+				    size_t *payload_len,
+				    char **error);
 
 struct resmon_jrpc_gauge {
 	const char *descr;
@@ -108,6 +115,7 @@ int resmon_jrpc_send(struct resmon_sock *sock, struct json_object *obj);
 
 int resmon_c_ping(int argc, char **argv);
 int resmon_c_stop(int argc, char **argv);
+int resmon_c_emad(int argc, char **argv);
 int resmon_c_stats(int argc, char **argv);
 
 /* resmon-stat.c */
@@ -134,6 +142,11 @@ struct resmon_stat *resmon_stat_create(void);
 void resmon_stat_destroy(struct resmon_stat *stat);
 struct resmon_stat_gauges resmon_stat_gauges(struct resmon_stat *stat);
 
+/* resmon-reg.c */
+
+int resmon_reg_process_emad(struct resmon_stat *stat,
+			    const uint8_t *buf, size_t len, char **error);
+
 /* resmon-back.c */
 
 struct resmon_back;
@@ -146,6 +159,12 @@ void resmon_back_fini(struct resmon_back *back);
 
 int resmon_back_get_capacity(struct resmon_back *back, uint64_t *capacity,
 			     char **error);
+bool resmon_back_handle_method(struct resmon_back *back,
+			       struct resmon_stat *stat,
+			       const char *method,
+			       struct resmon_sock *peer,
+			       struct json_object *params_obj,
+			       struct json_object *id);
 
 /* resmon-d.c */
 

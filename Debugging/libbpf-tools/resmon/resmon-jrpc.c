@@ -410,6 +410,32 @@ int resmon_jrpc_dissect_params_empty(struct json_object *obj,
 	return resmon_jrpc_dissect(obj, NULL, NULL, NULL, 0, error);
 }
 
+int resmon_jrpc_dissect_params_emad(struct json_object *obj,
+				    const char **payload,
+				    size_t *payload_len,
+				    char **error)
+{
+	enum {
+		pol_payload,
+	};
+	struct resmon_jrpc_policy policy[] = {
+		[pol_payload] = { .key = "payload", .type = json_type_string,
+				  .required = true },
+	};
+	struct json_object *values[ARRAY_SIZE(policy)] = {};
+	bool seen[ARRAY_SIZE(policy)] = {};
+	int err;
+
+	err = resmon_jrpc_dissect(obj, policy, seen, values,
+				  ARRAY_SIZE(policy), error);
+	if (err)
+		return err;
+
+	*payload = json_object_get_string(values[pol_payload]);
+	*payload_len = json_object_get_string_len(values[pol_payload]);
+	return 0;
+}
+
 static int
 resmon_jrpc_dissect_stats_gauge(struct json_object *gauge_obj,
 				struct resmon_jrpc_gauge *pgauge,

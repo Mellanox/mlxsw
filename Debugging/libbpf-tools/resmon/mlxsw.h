@@ -1,0 +1,9 @@
+/* SPDX-License-Identifier: BSD-3-Clause OR GPL-2.0 */
+
+/* EMAD TLV Types */
+enum {
+	MLXSW_EMAD_TLV_TYPE_END,
+	MLXSW_EMAD_TLV_TYPE_OP,
+	MLXSW_EMAD_TLV_TYPE_STRING,
+	MLXSW_EMAD_TLV_TYPE_REG,
+};

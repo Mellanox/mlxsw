@@ -263,6 +263,146 @@ int resmon_c_stop(int argc, char **argv)
 	return resmon_c_stop_jrpc();
 }
 
+static void resmon_c_emad_help(void)
+{
+	fprintf(stderr,
+		"Usage: resmon emad [hex | raw] string PAYLOAD\n"
+		"\n"
+	);
+}
+
+static int resmon_c_emad_jrpc(const char *payload, size_t payload_len)
+{
+	struct json_object *payload_obj;
+	struct json_object *params_obj;
+	struct json_object *response;
+	struct json_object *request;
+	struct json_object *result;
+	const int id = 1;
+	int err;
+
+	request = resmon_jrpc_new_request(id, "emad");
+	if (request == NULL)
+		return -1;
+
+	params_obj = json_object_new_object();
+	if (params_obj == NULL) {
+		err = -ENOMEM;
+		goto put_request;
+	}
+
+	payload_obj = json_object_new_string_len(payload, payload_len);
+	if (payload_obj == NULL) {
+		err = -ENOMEM;
+		goto put_params_obj;
+	}
+
+	if (json_object_object_add(params_obj, "payload", payload_obj)) {
+		err = -ENOMEM;
+		goto put_payload_obj;
+	}
+	payload_obj = NULL;
+
+	if (json_object_object_add(request, "params", params_obj)) {
+		err = -1;
+		goto put_params_obj;
+	}
+	params_obj = NULL;
+
+	response = resmon_c_send_request(request);
+	if (response == NULL) {
+		err = -1;
+		goto put_request;
+	}
+
+	if (!resmon_c_handle_response(response, id, json_type_null, &result)) {
+		err = -1;
+		goto put_response;
+	}
+
+	if (env.verbosity > 0)
+		fprintf(stderr, "resmond took the EMAD\n");
+
+	json_object_put(result);
+put_response:
+	json_object_put(response);
+put_payload_obj:
+	json_object_put(payload_obj);
+put_params_obj:
+	json_object_put(params_obj);
+put_request:
+	json_object_put(request);
+	return err;
+}
+
+int resmon_c_emad(int argc, char **argv)
+{
+	char *payload = NULL;
+	size_t payload_len;
+	enum {
+		mode_hex,
+		mode_raw,
+	} mode = mode_hex;
+	int rc = 0;
+
+	while (argc > 0) {
+		if (strcmp(*argv, "string") == 0) {
+			NEXT_ARG();
+			payload = strdup(*argv);
+			if (payload == NULL) {
+				fprintf(stderr, "Failed to strdup: %m\n");
+				rc = -1;
+				goto out;
+			}
+			payload_len = strlen(payload);
+			NEXT_ARG_FWD();
+			break;
+		} else if (strcmp(*argv, "help") == 0) {
+			resmon_c_emad_help();
+			goto out;
+		} else {
+			fprintf(stderr, "What is \"%s\"?\n", *argv);
+			rc = -1;
+			goto out;
+		}
+		continue;
+
+incomplete_command:
+		fprintf(stderr, "Command line is not complete. Try option \"help\"\n");
+		rc = -1;
+		goto out;
+	}
+
+	if (payload == NULL) {
+		fprintf(stderr, "EMAD payload not given.\n");
+		rc = -1;
+		goto out;
+	}
+
+	if (mode == mode_raw) {
+		char *enc_payload = malloc(payload_len * 2 + 1);
+
+		if (enc_payload == NULL) {
+			fprintf(stderr, "Failed to allocate buffer for decoded payload: %m\n");
+			rc = -1;
+			goto out;
+		}
+
+		for (size_t i = 0; i < payload_len; i++)
+			sprintf(&enc_payload[2 * i], "%02x", payload[i]);
+
+		free(payload);
+		payload = enc_payload;
+		payload_len = payload_len * 2;
+	}
+
+	rc = resmon_c_emad_jrpc(payload, payload_len);
+
+out:
+	free(payload);
+	return rc;
+}
+
 static void resmon_c_stats_help(void)
 {
 	fprintf(stderr,
