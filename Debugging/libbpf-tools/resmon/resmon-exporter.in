@@ -1,0 +1,156 @@
+#!/usr/bin/env python
+"""Collect resmon stats and publish them via http or save them to a file."""
+import argparse
+import json
+import logging
+import os
+import prometheus_client
+import sys
+import time
+import socket
+import tempfile
+
+from prometheus_client.core import GaugeMetricFamily
+
+RESMON_DEFAULT_SOCKDIR = "@RUNSTATEDIR@"
+
+
+class bind_socket:
+    def __init__(self, sock):
+        self._sock = sock
+        self._name = None
+
+    def __enter__(self):
+        while True:
+            self._name = tempfile.mktemp(dir="/var/run/",
+                                         prefix="resmon.exporter.")
+            try:
+                self._sock.bind(self._name)
+                break
+            except OSError:
+                pass
+
+    def __exit__(self, exc_type, exc_value, exc_traceback):
+        os.unlink(self._name)
+
+class ResmonCollector(object):
+    """Collect resmon stats and publish them via http or save them to a
+       file."""
+
+    def __init__(self, args):
+        """Construct the object and parse the arguments."""
+        self.args = self._parse_args(args)
+
+    @staticmethod
+    def _parse_args(args):
+        parser = argparse.ArgumentParser()
+        group = parser.add_mutually_exclusive_group(required=True)
+        group.add_argument(
+            '-f',
+            '--textfile-name',
+            dest='textfile_name',
+            help=('Full file path where to store data for node '
+                  'collector to pick up')
+        )
+        group.add_argument(
+            '-l',
+            '--listen',
+            dest='listen',
+            help='Listen host:port, i.e. 0.0.0.0:9417'
+        )
+        parser.add_argument(
+            '-i',
+            '--interval',
+            dest='interval',
+            type=int,
+            help=('Number of seconds between updates of the textfile. '
+                  'Default is 5 seconds')
+        )
+        parser.add_argument(
+            '-1',
+            '--oneshot',
+            dest='oneshot',
+            action='store_true',
+            default=False,
+            help='Run only once and exit. Useful for running in a cronjob'
+        )
+        parser.add_argument(
+            '--resmon-sockdir',
+            dest='resmon_sockdir',
+            default=RESMON_DEFAULT_SOCKDIR,
+            help='The directory where resmon socket is located'
+        )
+        arguments = parser.parse_args(args)
+        if arguments.oneshot and not arguments.textfile_name:
+            logging.error('Oneshot has to be used with textfile mode')
+            parser.print_help()
+            sys.exit(1)
+        if arguments.interval and not arguments.textfile_name:
+            logging.error('Interval has to be used with textfile mode')
+            parser.print_help()
+            sys.exit(1)
+        if not arguments.interval:
+            arguments.interval = 5
+        return vars(arguments)
+
+    def resmon_jsonout_get(self):
+        """Open socket, execute stats command and return JSON output."""
+        with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as sock:
+            with bind_socket(sock):
+                sock.sendto(b"""{ "jsonrpc": "2.0", "id": 1, "method": "stats" }""",
+                                "%s/resmon.ctl" % self.args['resmon_sockdir'])
+                data = sock.recv(1024)
+                return json.loads(data)
+
+    def update_resmon_stats(self, gauge_val, gauge_cap):
+        """Update gauge with statistics from resmon."""
+        jsonout = self.resmon_jsonout_get()
+
+        try:
+            for count in jsonout["result"]["gauges"]:
+                labels = [count["name"], count["descr"]]
+                gauge_val.add_metric(labels, count["value"])
+                gauge_cap.add_metric(labels, count["capacity"])
+        except KeyError:
+            print("Failed to get stats")
+            sys.exit(1)
+
+    def collect(self):
+        """
+        Collect the stats.
+
+        Collect the stats and yield them. Prometheus client library
+        uses this method to respond to http queries or save them to disk.
+        """
+        gauge_val = GaugeMetricFamily('node_net_resmon_stats',
+                                      'Resmon stats',
+                                      labels=['name', 'descr'])
+
+        gauge_cap = GaugeMetricFamily('node_net_resmon_stats_capacity',
+                                      'Resmon stats capacity',
+                                      labels=['name', 'descr'])
+
+        self.update_resmon_stats(gauge_val, gauge_cap)
+        yield gauge_val
+        yield gauge_cap
+
+if __name__ == '__main__':
+    collector = ResmonCollector(sys.argv[1:])
+
+    registry = prometheus_client.CollectorRegistry()
+    registry.register(collector)
+    args = collector.args
+    if args['listen']:
+        (ip, port) = args['listen'].split(':')
+        prometheus_client.start_http_server(port=int(port),
+                                            addr=ip, registry=registry)
+        while True:
+            time.sleep(3600)
+    if args['textfile_name']:
+        while True:
+            collector.collect()
+            prometheus_client.write_to_textfile(args['textfile_name'],
+                                                registry)
+            if collector.args['oneshot']:
+                sys.exit(0)
+            time.sleep(args['interval'])

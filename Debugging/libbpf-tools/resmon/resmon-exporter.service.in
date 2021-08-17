@@ -1,0 +1,7 @@
+[Unit]
+Description=mlxsw resource monitor exporter
+Requisite=resmon.service
+After=resmon.service
+
+[Service]
+ExecStart=@BINDIR@/resmon-exporter -l 0.0.0.0:9417

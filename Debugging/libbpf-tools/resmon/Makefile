@@ -7,7 +7,7 @@ OUTPUT := .output
 INCLUDES := $(COMMON_INCLUDE)
 CFLAGS := -g -Wall
 
-APPS := resmon
+APPS := resmon resmon-exporter
 resmon-OBJECTS :=		\
 	$(OUTPUT)/resmon.o	\
 	$(OUTPUT)/resmon-back.o	\
@@ -21,6 +21,7 @@ resmon-OBJECTS :=		\
 	#
 SYSTEMD_UNITS :=				\
 	$(OUTPUT)/resmon.service		\
+	$(OUTPUT)/resmon-exporter.service	\
 	#
 EXTRA_CLEAN :=			\
 	$(OUTPUT)/config.h	\
