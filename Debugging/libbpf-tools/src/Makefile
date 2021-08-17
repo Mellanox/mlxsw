@@ -47,6 +47,10 @@ emadump: %: $(OUTPUT)/%.o $(LIBBPF_OBJ) $(COMMON_OBJ) | $(OUTPUT)
 	$(call msg,BINARY,$@)
 	$(Q)$(CC) $(CFLAGS) $^ -lelf -lz -lpcap -o $@
 
+resmon-test: resmon/resmon
+resmon-test:
+	./resmon/resmon-test.sh
+
 # delete failed targets
 .DELETE_ON_ERROR:
 

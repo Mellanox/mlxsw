@@ -16,6 +16,12 @@ install: install-resmon
 install-%:
 	$(Q)$(MAKE) -C $* install
 
+.PHONY: test
+test: test-resmon
+
+test-%:
+	$(Q)$(MAKE) -C $* test
+
 .PHONY: clean
 clean: $(DIRS:%=clean-%)
 	$(call msg,CLEAN)

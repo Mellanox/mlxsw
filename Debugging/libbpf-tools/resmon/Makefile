@@ -22,6 +22,9 @@ SYSTEMD_UNITS :=				\
 EXTRA_CLEAN :=			\
 	$(OUTPUT)/config.h	\
 	#
+TESTS :=		\
+	test.sh		\
+	#
 
 BUILT := $(APPS) $(SYSTEMD_UNITS)
 
@@ -37,6 +40,13 @@ install: $(BUILT)
 	$(Q)$(INSTALL_DATA) -d -m 755 '$(DESTDIR)$(RUNSTATEDIR)'
 	$(call do_install_program,$(APPS:%=$(OUTPUT)/%),$(BINDIR))
 	$(call do_install_program,$(SYSTEMD_UNITS),$(SYSTEMDSYSTEMUNITDIR))
+
+.PHONY: test
+test: $(TESTS:%=run-%)
+
+run-%: % $(APPS)
+	$(call msg,RUN,$*)
+	$(Q)./$*
 
 $(OUTPUT):
 	$(call msg,MKDIR,$@)

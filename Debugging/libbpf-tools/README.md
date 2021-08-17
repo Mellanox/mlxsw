@@ -55,6 +55,21 @@ where tools will be installed.
 $ make PREFIX=/usr LOCALSTATEDIR=/var
 ```
 
+## Testing
+
+Some tools support testing. To perform all available tests, run:
+
+```shell
+$ make test
+```
+
+It is also possible to run only a certain suite of tests:
+
+```shell
+$ make -C resmon test		# all resmon tests
+$ make -C resmon run-test.sh	# specifically this one suite
+```
+
 ## Installation
 
 Some tools support installation. To install all that do, run:
