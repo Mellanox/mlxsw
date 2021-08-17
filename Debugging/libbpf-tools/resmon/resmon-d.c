@@ -361,10 +361,15 @@ static int resmon_d_loop_sock(struct resmon_back *back, struct resmon_stat *stat
 	int err = 0;
 	enum {
 		pollfd_ctl,
+		pollfd_back,
 	};
 	struct pollfd pollfds[] = {
 		[pollfd_ctl] = {
 			.fd = ctl->fd,
+			.events = POLLIN,
+		},
+		[pollfd_back] = {
+			.fd = resmon_back_pollfd(back),
 			.events = POLLIN,
 		},
 	};
@@ -398,6 +403,11 @@ static int resmon_d_loop_sock(struct resmon_back *back, struct resmon_stat *stat
 				case pollfd_ctl:
 					err = resmon_d_ctl_activity(back, stat,
 								    ctl);
+					if (err != 0)
+						goto out;
+					break;
+				case pollfd_back:
+					err = resmon_back_activity(back, stat);
 					if (err != 0)
 						goto out;
 					break;
@@ -459,7 +469,7 @@ destroy_stat:
 static void resmon_d_start_help(void)
 {
 	fprintf(stderr,
-		"Usage: resmon start [mode mock]\n"
+		"Usage: resmon start [mode {hw | mock}]\n"
 		"\n"
 	);
 }
@@ -468,13 +478,16 @@ int resmon_d_start(int argc, char **argv)
 {
 	const struct resmon_back_cls *back_cls;
 	enum {
+		mode_hw,
 		mode_mock
-	} mode = mode_mock;
+	} mode = mode_hw;
 
 	while (argc > 0) {
 		if (strcmp(*argv, "mode") == 0) {
 			NEXT_ARG();
-			if (strcmp(*argv, "mock") == 0) {
+			if (strcmp(*argv, "hw") == 0) {
+				mode = mode_hw;
+			} else if (strcmp(*argv, "mock") == 0) {
 				mode = mode_mock;
 			} else {
 				fprintf(stderr, "Unrecognized mode: %s\n", *argv);
@@ -497,6 +510,9 @@ incomplete_command:
 	}
 
 	switch (mode) {
+	case mode_hw:
+		back_cls = &resmon_back_cls_hw;
+		break;
 	case mode_mock:
 		back_cls = &resmon_back_cls_mock;
 		break;

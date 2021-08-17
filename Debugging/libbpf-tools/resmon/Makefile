@@ -5,6 +5,8 @@ include $(REL_SRCDIR)/common.mk
 
 OUTPUT := .output
 INCLUDES := $(COMMON_INCLUDE)
+CFLAGS := -g -Wall
+
 APPS := resmon
 resmon-OBJECTS :=		\
 	$(OUTPUT)/resmon.o	\
@@ -22,6 +24,8 @@ SYSTEMD_UNITS :=				\
 	#
 EXTRA_CLEAN :=			\
 	$(OUTPUT)/config.h	\
+	$(OUTPUT)/resmon.bpf.o	\
+	$(OUTPUT)/resmon.skel.h	\
 	#
 TESTS :=		\
 	test.sh		\
@@ -55,7 +59,7 @@ $(OUTPUT):
 
 $(OUTPUT)/resmon: CFLAGS += $(shell pkgconf --libs libelf json-c libsystemd \
 				libnl-3.0 libnl-genl-3.0)
-$(OUTPUT)/resmon: $(resmon-OBJECTS)
+$(OUTPUT)/resmon: $(resmon-OBJECTS) $(LIBBPF_OBJ) $(COMMON_OBJ)
 	$(call msg,BINARY,$@)
 	$(Q)$(CC) $(CFLAGS) -lz $^ -o $@
 
@@ -68,6 +72,19 @@ $(OUTPUT)/resmon.o: INCLUDES += -I$(OUTPUT)
 
 $(OUTPUT)/resmon-dl.o: INCLUDES += $(shell pkgconf --cflags libnl-3.0 \
 				     libnl-genl-3.0)
+
+$(OUTPUT)/resmon.bpf.o: INCLUDES += $(LIBBPF_INCLUDE)
+$(OUTPUT)/resmon.bpf.o: resmon.bpf.c resmon.h ../common/vmlinux.h
+	$(call msg,BPF,$@)
+	$(Q)$(CLANG) -g -O2 -target bpf -D__TARGET_ARCH_$(ARCH) $(INCLUDES) $(CLANG_BPF_SYS_INCLUDES) -c $< -o $@
+	$(Q)$(LLVM_STRIP) -g $@ # strip useless DWARF info
+
+$(OUTPUT)/resmon-back.o: INCLUDES += $(LIBBPF_INCLUDE) -I$(OUTPUT)
+$(OUTPUT)/resmon-back.o: $(OUTPUT)/resmon.skel.h
+
+%.skel.h: %.bpf.o
+	$(call msg,GEN-SKEL,$@)
+	$(Q)$(BPFTOOL) gen skeleton $< > $@
 
 $(OUTPUT)/%: %.in | $(OUTPUT)
 	$(call msg,SED,$*)

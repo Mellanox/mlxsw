@@ -211,6 +211,8 @@ bool resmon_back_handle_method(struct resmon_back *back,
 			       struct resmon_sock *peer,
 			       struct json_object *params_obj,
 			       struct json_object *id);
+int resmon_back_pollfd(struct resmon_back *back);
+int resmon_back_activity(struct resmon_back *back, struct resmon_stat *stat);
 
 /* resmon-d.c */
 

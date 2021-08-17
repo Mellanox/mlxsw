@@ -2,8 +2,13 @@
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <syslog.h>
+#include <json-c/json_object.h>
+#include <bpf/libbpf.h>
 
 #include "resmon.h"
+#include "resmon.skel.h"
+#include "trace_helpers.h"
 
 struct resmon_back {
 	const struct resmon_back_cls *cls;
@@ -21,6 +26,8 @@ struct resmon_back_cls {
 			      struct resmon_sock *peer,
 			      struct json_object *params_obj,
 			      struct json_object *id);
+	int (*pollfd)(struct resmon_back *back);
+	int (*activity)(struct resmon_back *back, struct resmon_stat *stat);
 };
 
 struct resmon_back *resmon_back_init(const struct resmon_back_cls *cls)
@@ -52,15 +59,70 @@ bool resmon_back_handle_method(struct resmon_back *back,
 					params_obj, id);
 }
 
+int resmon_back_pollfd(struct resmon_back *back)
+{
+	return back->cls->pollfd(back);
+}
+
+int resmon_back_activity(struct resmon_back *back, struct resmon_stat *stat)
+{
+	return back->cls->activity(back, stat);
+}
+
 struct resmon_back_hw {
 	struct resmon_back base;
 	struct resmon_dl *dl;
+	struct resmon_bpf *bpf_obj;
+	struct ring_buffer *ringbuf;
+	struct resmon_stat *stat;
 };
+
+static int resmon_back_libbpf_print_fn(enum libbpf_print_level level,
+				       const char *format,
+				       va_list args)
+{
+	int prio = 0;
+
+	if ((int)level > env.verbosity)
+		return 0;
+
+	switch (level) {
+	case LIBBPF_WARN:
+		prio = LOG_WARNING;
+		break;
+	case LIBBPF_INFO:
+		prio = LOG_INFO;
+		break;
+	case LIBBPF_DEBUG:
+		prio = LOG_DEBUG;
+		break;
+	}
+
+	vsyslog(prio, format, args);
+	return 0;
+}
+
+static int resmon_back_hw_rb_sample_cb(void *ctx, void *data, size_t len)
+{
+	struct resmon_back_hw *back = ctx;
+	char *error;
+	int rc;
+
+	rc = resmon_reg_process_emad(back->stat, data, len, &error);
+	if (rc != 0) {
+		syslog(LOG_ERR, "EMAD processing error: %s", error);
+		free(error);
+	}
+	return 0;
+}
 
 static struct resmon_back *resmon_back_hw_init(void)
 {
 	struct resmon_back_hw *back;
+	struct ring_buffer *ringbuf;
+	struct resmon_bpf *bpf_obj;
 	struct resmon_dl *dl;
+	int rc;
 
 	back = malloc(sizeof(*back));
 	if (back == NULL)
@@ -72,13 +134,52 @@ static struct resmon_back *resmon_back_hw_init(void)
 		goto free_back;
 	}
 
+	libbpf_set_print(resmon_back_libbpf_print_fn);
+
+	rc = bump_memlock_rlimit();
+	if (rc != 0) {
+		fprintf(stderr, "Failed to increase rlimit: %d\n", rc);
+		goto destroy_dl;
+	}
+
+	bpf_obj = resmon_bpf__open();
+	if (bpf_obj == NULL) {
+		fprintf(stderr, "Failed to open the resmon BPF object\n");
+		goto destroy_dl;
+	}
+
+	rc = resmon_bpf__load(bpf_obj);
+	if (rc != 0) {
+		fprintf(stderr, "Failed to load the resmon BPF object\n");
+		goto destroy_bpf;
+	}
+
+	ringbuf = ring_buffer__new(bpf_map__fd(bpf_obj->maps.ringbuf),
+				   resmon_back_hw_rb_sample_cb, back, NULL);
+	if (ringbuf == NULL)
+		goto destroy_bpf;
+
+	rc = resmon_bpf__attach(bpf_obj);
+	if (rc != 0) {
+		fprintf(stderr, "Failed to attach BPF program\n");
+		goto free_ringbuf;
+	}
+
 	*back = (struct resmon_back_hw) {
 		.base.cls = &resmon_back_cls_hw,
+		.bpf_obj = bpf_obj,
+		.ringbuf = ringbuf,
 		.dl = dl,
 	};
 
 	return &back->base;
 
+free_ringbuf:
+	ring_buffer__free(ringbuf);
+destroy_bpf:
+	resmon_bpf__destroy(bpf_obj);
+destroy_dl:
+	resmon_dl_destroy(dl);
 free_back:
 	free(back);
 	return NULL;
@@ -89,6 +190,9 @@ static void resmon_back_hw_fini(struct resmon_back *base)
 	struct resmon_back_hw *back =
 		container_of(base, struct resmon_back_hw, base);
 
+	resmon_bpf__detach(back->bpf_obj);
+	ring_buffer__free(back->ringbuf);
+	resmon_bpf__destroy(back->bpf_obj);
 	resmon_dl_destroy(back->dl);
 	free(back);
 }
@@ -103,10 +207,35 @@ static int resmon_back_hw_get_capacity(struct resmon_back *base,
 	return resmon_dl_get_kvd_size(back->dl, capacity, error);
 }
 
+static int resmon_back_hw_pollfd(struct resmon_back *base)
+{
+	struct resmon_back_hw *back =
+		container_of(base, struct resmon_back_hw, base);
+
+	return ring_buffer__epoll_fd(back->ringbuf);
+}
+
+static int resmon_back_hw_activity(struct resmon_back *base,
+				   struct resmon_stat *stat)
+{
+	struct resmon_back_hw *back =
+		container_of(base, struct resmon_back_hw, base);
+	int n;
+
+	back->stat = stat;
+	n = ring_buffer__consume(back->ringbuf);
+	back->stat = NULL;
+	if (n < 0)
+		return -1;
+	return 0;
+}
+
 const struct resmon_back_cls resmon_back_cls_hw = {
 	.init = resmon_back_hw_init,
 	.fini = resmon_back_hw_fini,
 	.get_capacity = resmon_back_hw_get_capacity,
+	.pollfd = resmon_back_hw_pollfd,
+	.activity = resmon_back_hw_activity,
 };
 
 struct resmon_back_mock {
@@ -242,9 +371,15 @@ static bool resmon_back_mock_handle_method(struct resmon_back *back,
 	}
 }
 
+static int resmon_back_mock_pollfd(struct resmon_back *base)
+{
+	return -1;
+}
+
 const struct resmon_back_cls resmon_back_cls_mock = {
 	.init = resmon_back_mock_init,
 	.fini = resmon_back_mock_fini,
 	.get_capacity = resmon_back_mock_get_capacity,
 	.handle_method = resmon_back_mock_handle_method,
+	.pollfd = resmon_back_mock_pollfd,
 };
