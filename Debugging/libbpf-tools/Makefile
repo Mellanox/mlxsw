@@ -22,6 +22,12 @@ test: test-resmon
 test-%:
 	$(Q)$(MAKE) -C $* test
 
+.PHONY: doc
+doc: doc-resmon
+
+doc-%:
+	$(Q)$(MAKE) -C $* doc
+
 .PHONY: clean
 clean: $(DIRS:%=clean-%)
 	$(call msg,CLEAN)

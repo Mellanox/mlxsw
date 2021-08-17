@@ -55,6 +55,16 @@ where tools will be installed.
 $ make PREFIX=/usr LOCALSTATEDIR=/var
 ```
 
+### Building Documentation
+
+It is possible to request building specifically of only documentation, for
+the tools that do need documentation building:
+
+```shell
+$ make doc
+$ make -C resmon doc
+```
+
 ## Testing
 
 Some tools support testing. To perform all available tests, run:

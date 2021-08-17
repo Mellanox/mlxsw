@@ -31,11 +31,23 @@ EXTRA_CLEAN :=			\
 TESTS :=		\
 	test.sh		\
 	#
+MAN_PAGES :=				\
+	$(OUTPUT)/resmon.8		\
+	$(OUTPUT)/resmon-exporter.8	\
+	$(OUTPUT)/resmon-start.8	\
+	$(OUTPUT)/resmon-stop.8		\
+	$(OUTPUT)/resmon-ping.8		\
+	$(OUTPUT)/resmon-stats.8	\
+	$(OUTPUT)/resmon-emad.8		\
+	#
 
-BUILT := $(APPS) $(SYSTEMD_UNITS)
+BUILT := $(APPS) $(SYSTEMD_UNITS) $(MAN_PAGES)
 
 .PHONY: all
 all: $(BUILT)
+
+.PHONY: doc
+doc: $(MAN_PAGES)
 
 .PHONY: $(APPS)
 $(APPS): %: $(OUTPUT)/%
@@ -45,7 +57,9 @@ install: $(BUILT)
 	$(call msg,MKDIR,$(RUNSTATEDIR))
 	$(Q)$(INSTALL_DATA) -d -m 755 '$(DESTDIR)$(RUNSTATEDIR)'
 	$(call do_install_program,$(APPS:%=$(OUTPUT)/%),$(BINDIR))
-	$(call do_install_program,$(SYSTEMD_UNITS),$(SYSTEMDSYSTEMUNITDIR))
+	$(call do_install_data,$(SYSTEMD_UNITS),$(SYSTEMDSYSTEMUNITDIR))
+	$(call do_install_data,$(MAN_PAGES),$(MAN8DIR))
+	$(call do_install_data,README.md,$(DOCDIR))
 
 .PHONY: test
 test: $(TESTS:%=run-%)
@@ -92,9 +106,12 @@ $(OUTPUT)/%: %.in | $(OUTPUT)
 	$(Q)sed -e '$(VAR_SUBSTITUTIONS)' $< > $@
 	$(Q)chmod --reference=$< $@
 
+$(MAN_PAGES): $(OUTPUT)/%: %.md | $(OUTPUT)
+	pandoc --standalone --to man $< -o $@
+
 .PHONY: clean
 clean:
 	$(call msg,CLEAN)
 	$(Q)rm -f $(foreach tgt,$(APPS),$($(tgt)-OBJECTS))
-	$(Q)rm -f $(APPS:%=$(OUTPUT)/%) $(SYSTEMD_UNITS) $(EXTRA_CLEAN)
+	$(Q)rm -f $(APPS:%=$(OUTPUT)/%) $(SYSTEMD_UNITS) $(MAN_PAGES) $(EXTRA_CLEAN)
 	$(Q)if test -d $(OUTPUT); then rmdir $(OUTPUT); fi

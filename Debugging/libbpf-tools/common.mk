@@ -21,7 +21,7 @@ LOCALSTATEDIR = $(PREFIX)/var
 RUNSTATEDIR = $(LOCALSTATEDIR)/run
 DOCDIR = $(DATAROOTDIR)/doc/$(PACKAGE)
 MANDIR = $(DATAROOTDIR)/man
-MAN1DIR = $(MANDIR)/man1
+MAN8DIR = $(MANDIR)/man8
 SYSTEMDSYSTEMUNITDIR = $(shell pkgconf --variable=systemdsystemunitdir systemd)
 DESTDIR =
 
