@@ -2,7 +2,7 @@
 REL_SRCDIR := .
 include $(REL_SRCDIR)/common.mk
 
-DIRS = src
+DIRS = common src
 
 .PHONY: all
 all: $(DIRS:%=build-%)
@@ -13,7 +13,7 @@ build-%:
 .PHONY: clean
 clean: $(DIRS:%=clean-%)
 	$(call msg,CLEAN)
-	$(Q)rm -rf $(LIBBPF_OUTPUT) $(APPS)
+	$(Q)rm -rf $(LIBBPF_OUTPUT)
 
 clean-%:
 	$(Q)$(MAKE) -C $* clean

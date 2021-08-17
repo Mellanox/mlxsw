@@ -50,6 +50,14 @@ $(LIBBPF_OUTPUT)/libbpf:
 	$(call msg,MKDIR,$@)
 	$(Q)mkdir -p $@
 
+COMMON_OUTPUT := $(TOP_SRCDIR)/common/.output
+COMMON_INCLUDE := -I$(TOP_SRCDIR)/common
+COMMON_OBJ := $(COMMON_OUTPUT)/libcommon.a
+COMMON_SRC := $(TOP_SRCDIR)/common
+
+$(COMMON_OBJ): $(LIBBPF_OBJ)
+	$(Q)$(MAKE) -C $(COMMON_SRC)
+
 # delete failed targets
 .DELETE_ON_ERROR:
 

@@ -3,15 +3,10 @@ REL_SRCDIR := ..
 include $(REL_SRCDIR)/common.mk
 
 OUTPUT := .output
-INCLUDES := -I$(OUTPUT) $(LIBBPF_INCLUDE)
+INCLUDES := -I$(OUTPUT) $(LIBBPF_INCLUDE) $(COMMON_INCLUDE)
 CFLAGS := -g -Wall
 
 APPS = emadlatency emadump trapagg
-
-COMMON_OBJ = \
-	$(OUTPUT)/trace_helpers.o \
-	$(OUTPUT)/map_helpers.o \
-	#
 
 .PHONY: all
 all: $(APPS)
@@ -26,7 +21,7 @@ $(OUTPUT):
 	$(Q)mkdir -p $@
 
 # Build BPF code
-$(OUTPUT)/%.bpf.o: %.bpf.c $(LIBBPF_OBJ) $(wildcard %.h) vmlinux.h | $(OUTPUT)
+$(OUTPUT)/%.bpf.o: %.bpf.c $(LIBBPF_OBJ) $(wildcard %.h) ../common/vmlinux.h | $(OUTPUT)
 	$(call msg,BPF,$@)
 	$(Q)$(CLANG) -g -O2 -target bpf -D__TARGET_ARCH_$(ARCH) $(INCLUDES) $(CLANG_BPF_SYS_INCLUDES) -c $(filter %.c,$^) -o $@
 	$(Q)$(LLVM_STRIP) -g $@ # strip useless DWARF info
