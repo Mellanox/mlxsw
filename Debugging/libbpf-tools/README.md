@@ -7,16 +7,27 @@ observability and debuggability of mlxsw. The tools are written using
 
 ## List of tools
 
-* emadlatency: Summarize EMAD latency as a histogram. [Examples](src/emadlatency_example.txt)
-* emadump: Dump EMADs to a PCAP file. [Examples](src/emadump_example.txt)
-* trapagg: Dump aggregated per-{trap, flow} statistics. [Examples](src/trapagg_example.txt)
+* src/emadlatency: Summarize EMAD latency as a histogram. [Examples](src/emadlatency_example.txt)
+* src/emadump: Dump EMADs to a PCAP file. [Examples](src/emadump_example.txt)
+* src/trapagg: Dump aggregated per-{trap, flow} statistics. [Examples](src/trapagg_example.txt)
 
 ## Building
 
 ```shell
 $ git submodule update --init --recursive       # check out libbpf
-$ cd src
+```
+
+Then either just build everything:
+
+```shell
 $ make
+```
+
+Or cherry-pick what should be built:
+
+```shell
+$ make -C src
+$ make -C src emadump
 ```
 
 ## Further resources
