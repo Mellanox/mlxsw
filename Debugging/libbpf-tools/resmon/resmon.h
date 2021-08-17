@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause OR GPL-2.0 */
+#include <assert.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -14,6 +15,14 @@
 #define NEXT_ARG_OK() (argc - 1 > 0)
 #define NEXT_ARG_FWD() do { argv++; argc--; } while (0)
 #define PREV_ARG() do { argv--; argc++; } while (0)
+
+#define __same_type(a, b) __builtin_types_compatible_p(typeof(a), typeof(b))
+#define container_of(ptr, type, member) ({				\
+	void *__mptr = (void *)(ptr);					\
+	static_assert(__same_type(*(ptr), ((type *)0)->member) ||	\
+		      __same_type(*(ptr), void),			\
+		      "pointer type mismatch in container_of()");	\
+	((type *)(__mptr - offsetof(type, member))); })
 
 /* resmon.c */
 
@@ -169,6 +178,15 @@ int resmon_stat_ralue_delete(struct resmon_stat *stat,
 			     uint16_t virtual_router,
 			     struct resmon_stat_dip dip);
 
+
+/* resmon-dl.c */
+
+struct resmon_dl;
+
+struct resmon_dl *resmon_dl_create(void);
+void resmon_dl_destroy(struct resmon_dl *dl);
+int resmon_dl_get_kvd_size(struct resmon_dl *dl, uint64_t *size, char **error);
+
 /* resmon-reg.c */
 
 int resmon_reg_process_emad(struct resmon_stat *stat,
@@ -179,6 +197,7 @@ int resmon_reg_process_emad(struct resmon_stat *stat,
 struct resmon_back;
 struct resmon_back_cls;
 
+extern const struct resmon_back_cls resmon_back_cls_hw;
 extern const struct resmon_back_cls resmon_back_cls_mock;
 
 struct resmon_back *resmon_back_init(const struct resmon_back_cls *cls);
