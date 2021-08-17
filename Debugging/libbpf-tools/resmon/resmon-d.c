@@ -73,6 +73,31 @@ void resmon_d_respond_memerr(struct resmon_sock *peer, struct json_object *id)
 	resmon_d_respond_interr(peer, id, "Memory allocation issue");
 }
 
+static void resmon_d_handle_ping(struct resmon_sock *peer,
+				 struct json_object *params_obj,
+				 struct json_object *id)
+{
+	struct json_object *obj;
+	int rc;
+
+	obj = resmon_jrpc_new_object(id);
+	if (obj == NULL)
+		return;
+
+	rc = json_object_object_add(obj, "result", params_obj);
+	if (rc != 0)
+		goto put_obj;
+	json_object_get(params_obj);
+
+	resmon_jrpc_send(peer, obj);
+	json_object_put(obj);
+	return;
+
+put_obj:
+	json_object_put(obj);
+	resmon_d_respond_memerr(peer, id);
+}
+
 static void resmon_d_handle_stop(struct resmon_sock *peer,
 				 struct json_object *params_obj,
 				 struct json_object *id)
@@ -114,6 +139,9 @@ static void resmon_d_handle_method(struct resmon_back *back,
 {
 	if (strcmp(method, "stop") == 0) {
 		resmon_d_handle_stop(peer, params_obj, id);
+		return;
+	} else if (strcmp(method, "ping") == 0) {
+		resmon_d_handle_ping(peer, params_obj, id);
 		return;
 	}
 

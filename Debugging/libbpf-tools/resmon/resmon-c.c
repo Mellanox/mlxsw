@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <time.h>
 #include <json-c/json_object.h>
 #include <json-c/json_tokener.h>
 #include <json-c/json_util.h>
@@ -131,6 +132,81 @@ static int resmon_c_cmd_noargs(int argc, char **argv, void (*help_cb)(void))
 	}
 
 	return 0;
+}
+
+static void resmon_c_ping_help(void)
+{
+	fprintf(stderr,
+		"Usage: resmon ping\n"
+		"\n"
+	);
+}
+
+static int resmon_c_ping_jrpc(void)
+{
+	struct json_object *response;
+	struct json_object *request;
+	struct json_object *result;
+	const int id = 1;
+	int err;
+	int nr;
+	int rc;
+	int r;
+
+	request = resmon_jrpc_new_request(id, "ping");
+	if (request == NULL)
+		return -1;
+
+	srand(time(NULL));
+	r = rand();
+	rc = resmon_jrpc_object_add_int(request, "params", r);
+	if (rc != 0) {
+		fprintf(stderr, "Failed to form a request object.\n");
+		err = -1;
+		goto put_request;
+	}
+
+	response = resmon_c_send_request(request);
+	if (response == NULL) {
+		err = -1;
+		goto put_request;
+	}
+
+	if (!resmon_c_handle_response(response, id, json_type_int, &result)) {
+		err = -1;
+		goto put_response;
+	}
+
+	nr = json_object_get_int(result);
+	if (nr != r) {
+		fprintf(stderr, "Unexpected ping response: sent %d, got %d.\n",
+			r, nr);
+		err = -1;
+		goto put_result;
+	}
+
+	if (env.verbosity > 0)
+		fprintf(stderr, "resmond is alive\n");
+	err = 0;
+
+put_result:
+	json_object_put(result);
+put_response:
+	json_object_put(response);
+put_request:
+	json_object_put(request);
+	return err;
+}
+
+int resmon_c_ping(int argc, char **argv)
+{
+	int err;
+
+	err = resmon_c_cmd_noargs(argc, argv, resmon_c_ping_help);
+	if (err != 0)
+		return err;
+
+	return resmon_c_ping_jrpc();
 }
 
 static void resmon_c_stop_help(void)
