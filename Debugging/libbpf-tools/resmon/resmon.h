@@ -146,6 +146,10 @@ enum {
 		0 RESMON_RESOURCES(RESMON_RSRC_EXPAND_AS_PLUS1)
 };
 
+struct resmon_resources_enabled {
+	bool enabled[resmon_resource_count];
+};
+
 struct resmon_stat;
 
 struct resmon_stat_gauges {
@@ -189,7 +193,14 @@ int resmon_dl_get_kvd_size(struct resmon_dl *dl, uint64_t *size, char **error);
 
 /* resmon-reg.c */
 
-int resmon_reg_process_emad(struct resmon_stat *stat,
+struct resmon_reg;
+
+struct resmon_reg *
+resmon_reg_create(struct resmon_resources_enabled rsrc_en);
+void resmon_reg_destroy(struct resmon_reg *rreg);
+
+int resmon_reg_process_emad(struct resmon_reg *rreg,
+			    struct resmon_stat *stat,
 			    const uint8_t *buf, size_t len, char **error);
 
 /* resmon-back.c */
@@ -207,12 +218,14 @@ int resmon_back_get_capacity(struct resmon_back *back, uint64_t *capacity,
 			     char **error);
 bool resmon_back_handle_method(struct resmon_back *back,
 			       struct resmon_stat *stat,
+			       struct resmon_reg *rreg,
 			       const char *method,
 			       struct resmon_sock *peer,
 			       struct json_object *params_obj,
 			       struct json_object *id);
 int resmon_back_pollfd(struct resmon_back *back);
-int resmon_back_activity(struct resmon_back *back, struct resmon_stat *stat);
+int resmon_back_activity(struct resmon_back *back, struct resmon_stat *stat,
+			 struct resmon_reg *rreg);
 
 /* resmon-d.c */
 

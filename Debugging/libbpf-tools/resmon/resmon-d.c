@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <syslog.h>
+#include <ctype.h>
 #include <json-c/json_object.h>
 #include <json-c/json_tokener.h>
 #include <systemd/sd-daemon.h>
@@ -195,6 +196,7 @@ put_gauge_obj:
 
 static void resmon_d_handle_stats(struct resmon_back *back,
 				  struct resmon_stat *stat,
+				  struct resmon_resources_enabled rsrc_en,
 				  struct resmon_sock *peer,
 				  struct json_object *params_obj,
 				  struct json_object *id)
@@ -253,6 +255,9 @@ static void resmon_d_handle_stats(struct resmon_back *back,
 
 	gauges = resmon_stat_gauges(stat);
 	for (int i = 0; i < ARRAY_SIZE(gauges.values); i++) {
+		if (!rsrc_en.enabled[i])
+			continue;
+
 		rc = resmon_d_stats_attach_gauge(gauges_obj,
 					    resmon_d_gauge_names[i],
 					    resmon_d_gauge_descriptions[i],
@@ -290,6 +295,8 @@ put_obj:
 
 static void resmon_d_handle_method(struct resmon_back *back,
 				   struct resmon_stat *stat,
+				   struct resmon_reg *rreg,
+				   struct resmon_resources_enabled rsrc_en,
 				   struct resmon_sock *peer,
 				   const char *method,
 				   struct json_object *params_obj,
@@ -302,9 +309,10 @@ static void resmon_d_handle_method(struct resmon_back *back,
 		resmon_d_handle_ping(peer, params_obj, id);
 		return;
 	} else if (strcmp(method, "stats") == 0) {
-		resmon_d_handle_stats(back, stat, peer, params_obj, id);
+		resmon_d_handle_stats(back, stat, rsrc_en, peer,
+				      params_obj, id);
 		return;
-	} else if (resmon_back_handle_method(back, stat, method,
+	} else if (resmon_back_handle_method(back, stat, rreg, method,
 					     peer, params_obj, id)) {
 		return;
 	}
@@ -315,6 +323,8 @@ static void resmon_d_handle_method(struct resmon_back *back,
 
 static int resmon_d_ctl_activity(struct resmon_back *back,
 				 struct resmon_stat *stat,
+				 struct resmon_reg *rreg,
+				 struct resmon_resources_enabled rsrc_en,
 				 struct resmon_sock *ctl)
 {
 	struct json_object *request_obj;
@@ -346,7 +356,8 @@ static int resmon_d_ctl_activity(struct resmon_back *back,
 		goto put_req_obj;
 	}
 
-	resmon_d_handle_method(back, stat, &peer, method, params, id);
+	resmon_d_handle_method(back, stat, rreg, rsrc_en,
+			       &peer, method, params, id);
 
 put_req_obj:
 	json_object_put(request_obj);
@@ -356,6 +367,8 @@ free_req:
 }
 
 static int resmon_d_loop_sock(struct resmon_back *back, struct resmon_stat *stat,
+			      struct resmon_reg *rreg,
+			      struct resmon_resources_enabled rsrc_en,
 			      struct resmon_sock *ctl)
 {
 	int err = 0;
@@ -402,12 +415,15 @@ static int resmon_d_loop_sock(struct resmon_back *back, struct resmon_stat *stat
 				switch (i) {
 				case pollfd_ctl:
 					err = resmon_d_ctl_activity(back, stat,
+								    rreg,
+								    rsrc_en,
 								    ctl);
 					if (err != 0)
 						goto out;
 					break;
 				case pollfd_back:
-					err = resmon_back_activity(back, stat);
+					err = resmon_back_activity(back, stat,
+								   rreg);
 					if (err != 0)
 						goto out;
 					break;
@@ -420,7 +436,9 @@ out:
 	return err;
 }
 
-static int resmon_d_loop(struct resmon_back *back, struct resmon_stat *stat)
+static int resmon_d_loop(struct resmon_back *back, struct resmon_stat *stat,
+			 struct resmon_reg *rreg,
+			 struct resmon_resources_enabled rsrc_en)
 {
 	struct resmon_sock ctl;
 	int err;
@@ -435,48 +453,136 @@ static int resmon_d_loop(struct resmon_back *back, struct resmon_stat *stat)
 
 	sd_notify(0, "READY=1");
 
-	err = resmon_d_loop_sock(back, stat, &ctl);
+	err = resmon_d_loop_sock(back, stat, rreg, rsrc_en, &ctl);
 
 	resmon_sock_close_d(&ctl);
 	return err;
 }
 
-static int resmon_d_do_start(const struct resmon_back_cls *back_cls)
+static int resmon_d_do_start(const struct resmon_back_cls *back_cls,
+			     struct resmon_resources_enabled rsrc_en)
 {
 	struct resmon_back *back;
 	struct resmon_stat *stat;
+	struct resmon_reg *rreg;
 	int err = 0;
 
 	stat = resmon_stat_create();
 	if (stat == NULL)
 		return -1;
 
+	rreg = resmon_reg_create(rsrc_en);
+	if (rreg == NULL)
+		goto destroy_stat;
+
 	back = resmon_back_init(back_cls);
 	if (back == NULL)
-		goto destroy_stat;
+		goto destroy_rreg;
 
 	openlog("resmon", LOG_PID | LOG_CONS, LOG_USER);
 
-	err = resmon_d_loop(back, stat);
+	err = resmon_d_loop(back, stat, rreg, rsrc_en);
 
 	closelog();
 	resmon_back_fini(back);
+destroy_rreg:
+	resmon_reg_destroy(rreg);
 destroy_stat:
 	resmon_stat_destroy(stat);
 	return err;
 }
 
+struct resmon_d_resgrp_info {
+	const char *const name;
+	const struct resmon_resources_enabled rsrc_en;
+};
+
+#define RESMON_D_RSRC_AS_RESGRP_INFO(NAME, DESCR)	\
+	{ #NAME, {{ [RESMON_RSRC_ ## NAME] = true }}},
+
+static const struct resmon_d_resgrp_info resmon_d_resgrp_info[] = {
+	RESMON_RESOURCES(RESMON_D_RSRC_AS_RESGRP_INFO)
+	{
+		"lpm",
+		{{
+			[RESMON_RSRC_LPM_IPV4] = true,
+			[RESMON_RSRC_LPM_IPV6] = true,
+		}}
+	},
+};
+
+#undef RESMON_D_RSRC_AS_RESGRP_INFO
+
+static int resmon_d_enable_resources(const char *name,
+				     struct resmon_resources_enabled *rsrc_en)
+{
+	const struct resmon_d_resgrp_info *info;
+
+	for (size_t i = 0; i < ARRAY_SIZE(resmon_d_resgrp_info); i++) {
+		info = &resmon_d_resgrp_info[i];
+		if (strcasecmp(name, info->name) != 0)
+			continue;
+
+		for (size_t j = 0; j < ARRAY_SIZE(info->rsrc_en.enabled); j++)
+			rsrc_en->enabled[j] |= info->rsrc_en.enabled[j];
+
+		return 0;
+	}
+
+	return -1;
+}
+
+static void resmon_d_resources_fill(int *p_argc, char ***p_argv,
+				    struct resmon_resources_enabled *rsrc_en)
+{
+	char **argv = *p_argv;
+	int argc = *p_argc;
+
+	while (argc > 0) {
+		if (resmon_d_enable_resources(*argv, rsrc_en) < 0)
+			goto out;
+
+		NEXT_ARG_FWD();
+	}
+
+out:
+	*p_argc = argc;
+	*p_argv = argv;
+}
+
+static void
+resmon_d_set_all_resources(struct resmon_resources_enabled *rsrc_en)
+{
+	for (int i = 0; i < ARRAY_SIZE(rsrc_en->enabled); i++)
+		rsrc_en->enabled[i] = true;
+}
+
+static void resmon_d_resource_name_print(const char *name)
+{
+	for (const char *ptr = name; *ptr != '\0'; ptr++)
+		fprintf(stderr, "%c", tolower(*ptr));
+}
+
 static void resmon_d_start_help(void)
 {
 	fprintf(stderr,
-		"Usage: resmon start [mode {hw | mock}]\n"
-		"\n"
-	);
+		"Usage: resmon start [mode {hw | mock}] [resources RES RES ...]\n"
+		"RES ::= [");
+
+	for (size_t i = 0; i < ARRAY_SIZE(resmon_d_resgrp_info); i++) {
+		if (i != 0)
+			fprintf(stderr, " | ");
+		resmon_d_resource_name_print(resmon_d_resgrp_info[i].name);
+	}
+
+	fprintf(stderr, "]\n");
 }
 
 int resmon_d_start(int argc, char **argv)
 {
+	struct resmon_resources_enabled rsrc_en = {};
 	const struct resmon_back_cls *back_cls;
+	bool filter_resources = false;
 	enum {
 		mode_hw,
 		mode_mock
@@ -494,7 +600,10 @@ int resmon_d_start(int argc, char **argv)
 				return -1;
 			}
 			NEXT_ARG_FWD();
-			break;
+		} else if (strcmp(*argv, "resources") == 0) {
+			NEXT_ARG();
+			resmon_d_resources_fill(&argc, &argv, &rsrc_en);
+			filter_resources = true;
 		} else if (strcmp(*argv, "help") == 0) {
 			resmon_d_start_help();
 			return 0;
@@ -518,5 +627,8 @@ incomplete_command:
 		break;
 	}
 
-	return resmon_d_do_start(back_cls);
+	if (!filter_resources)
+		resmon_d_set_all_resources(&rsrc_en);
+
+	return resmon_d_do_start(back_cls, rsrc_en);
 }

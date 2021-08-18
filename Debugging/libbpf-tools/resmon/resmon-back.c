@@ -22,15 +22,18 @@ struct resmon_back_cls {
 			    char **error);
 	bool (*handle_method)(struct resmon_back *back,
 			      struct resmon_stat *stat,
+			      struct resmon_reg *rreg,
 			      const char *method,
 			      struct resmon_sock *peer,
 			      struct json_object *params_obj,
 			      struct json_object *id);
 	int (*pollfd)(struct resmon_back *back);
-	int (*activity)(struct resmon_back *back, struct resmon_stat *stat);
+	int (*activity)(struct resmon_back *back, struct resmon_stat *stat,
+			struct resmon_reg *rreg);
 };
 
-struct resmon_back *resmon_back_init(const struct resmon_back_cls *cls)
+struct resmon_back *
+resmon_back_init(const struct resmon_back_cls *cls)
 {
 	return cls->init();
 }
@@ -48,6 +51,7 @@ int resmon_back_get_capacity(struct resmon_back *back, uint64_t *capacity,
 
 bool resmon_back_handle_method(struct resmon_back *back,
 			       struct resmon_stat *stat,
+			       struct resmon_reg *rreg,
 			       const char *method,
 			       struct resmon_sock *peer,
 			       struct json_object *params_obj,
@@ -55,7 +59,7 @@ bool resmon_back_handle_method(struct resmon_back *back,
 {
 	if (back->cls->handle_method == NULL)
 		return false;
-	return back->cls->handle_method(back, stat, method, peer,
+	return back->cls->handle_method(back, stat, rreg, method, peer,
 					params_obj, id);
 }
 
@@ -64,9 +68,10 @@ int resmon_back_pollfd(struct resmon_back *back)
 	return back->cls->pollfd(back);
 }
 
-int resmon_back_activity(struct resmon_back *back, struct resmon_stat *stat)
+int resmon_back_activity(struct resmon_back *back, struct resmon_stat *stat,
+			 struct resmon_reg *rreg)
 {
-	return back->cls->activity(back, stat);
+	return back->cls->activity(back, stat, rreg);
 }
 
 struct resmon_back_hw {
@@ -75,6 +80,7 @@ struct resmon_back_hw {
 	struct resmon_bpf *bpf_obj;
 	struct ring_buffer *ringbuf;
 	struct resmon_stat *stat;
+	struct resmon_reg *rreg;
 };
 
 static int resmon_back_libbpf_print_fn(enum libbpf_print_level level,
@@ -108,7 +114,7 @@ static int resmon_back_hw_rb_sample_cb(void *ctx, void *data, size_t len)
 	char *error;
 	int rc;
 
-	rc = resmon_reg_process_emad(back->stat, data, len, &error);
+	rc = resmon_reg_process_emad(back->rreg, back->stat, data, len, &error);
 	if (rc != 0) {
 		syslog(LOG_ERR, "EMAD processing error: %s", error);
 		free(error);
@@ -116,7 +122,8 @@ static int resmon_back_hw_rb_sample_cb(void *ctx, void *data, size_t len)
 	return 0;
 }
 
-static struct resmon_back *resmon_back_hw_init(void)
+static struct resmon_back *
+resmon_back_hw_init(void)
 {
 	struct resmon_back_hw *back;
 	struct ring_buffer *ringbuf;
@@ -216,14 +223,17 @@ static int resmon_back_hw_pollfd(struct resmon_back *base)
 }
 
 static int resmon_back_hw_activity(struct resmon_back *base,
-				   struct resmon_stat *stat)
+				   struct resmon_stat *stat,
+				   struct resmon_reg *rreg)
 {
 	struct resmon_back_hw *back =
 		container_of(base, struct resmon_back_hw, base);
 	int n;
 
 	back->stat = stat;
+	back->rreg = rreg;
 	n = ring_buffer__consume(back->ringbuf);
+	back->rreg = NULL;
 	back->stat = NULL;
 	if (n < 0)
 		return -1;
@@ -242,7 +252,8 @@ struct resmon_back_mock {
 	struct resmon_back base;
 };
 
-static struct resmon_back *resmon_back_mock_init(void)
+static struct resmon_back *
+resmon_back_mock_init(void)
 {
 	struct resmon_back_mock *back;
 
@@ -288,6 +299,7 @@ static int resmon_back_mock_emad_decode_payload(uint8_t *dec, const char *enc,
 }
 
 static void resmon_back_mock_handle_emad(struct resmon_stat *stat,
+					 struct resmon_reg *rreg,
 					 struct resmon_sock *peer,
 					 struct json_object *params_obj,
 					 struct json_object *id)
@@ -327,8 +339,8 @@ static void resmon_back_mock_handle_emad(struct resmon_stat *stat,
 		goto out;
 	}
 
-
-	rc = resmon_reg_process_emad(stat, dec_payload, dec_payload_len, &error);
+	rc = resmon_reg_process_emad(rreg, stat, dec_payload,
+				     dec_payload_len, &error);
 	if (rc != 0) {
 		resmon_d_respond_error(peer, id, resmon_jrpc_e_reg_process_emad,
 				       "EMAD processing error", error);
@@ -358,13 +370,14 @@ err_respond_memerr:
 
 static bool resmon_back_mock_handle_method(struct resmon_back *back,
 					   struct resmon_stat *stat,
+					   struct resmon_reg *rreg,
 					   const char *method,
 					   struct resmon_sock *peer,
 					   struct json_object *params_obj,
 					   struct json_object *id)
 {
 	if (strcmp(method, "emad") == 0) {
-		resmon_back_mock_handle_emad(stat, peer, params_obj, id);
+		resmon_back_mock_handle_emad(stat, rreg, peer, params_obj, id);
 		return true;
 	} else {
 		return false;

@@ -4,8 +4,71 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "resmon.h"
+
+#define RESMON_REG_REGISTERS(X)		\
+	X(RALUE)
+
+#define RESMON_REG_REGISTER_AS_ENUM(NAME)	\
+	RESMON_REG_REG_ ## NAME,
+#define RESMON_REG_REGISTER_AS_REGMASK(NAME)	\
+	RESMON_REG_REGMASK_ ## NAME = (1 << RESMON_REG_REG_ ## NAME),
+
+enum {
+	RESMON_REG_REGISTERS(RESMON_REG_REGISTER_AS_ENUM)
+};
+
+enum {
+	RESMON_REG_REGISTERS(RESMON_REG_REGISTER_AS_REGMASK)
+};
+#undef RESMON_REG_REGISTER_AS_ENUM
+#undef RESMON_REG_REGISTER_AS_REGMASK
+
+#define RESMON_REG_LPM_IPV4_REGMASK	RESMON_REG_REGMASK_RALUE
+#define RESMON_REG_LPM_IPV6_REGMASK	RESMON_REG_REGMASK_RALUE
+
+#define RESMON_REG_RSRC_AS_REGMASK(NAME, DESCRIPTION)		\
+	[RESMON_RSRC_ ## NAME] = RESMON_REG_ ## NAME ## _REGMASK,
+
+static const unsigned int resmon_reg_resource_regmask[] = {
+	RESMON_RESOURCES(RESMON_REG_RSRC_AS_REGMASK)
+};
+
+#undef RESMON_REG_RSRC_AS_REGMASK
+
+struct resmon_reg {
+	struct resmon_resources_enabled rsrc_en;
+	unsigned int regmask;
+};
+
+struct resmon_reg *
+resmon_reg_create(struct resmon_resources_enabled rsrc_en)
+{
+	unsigned int regmask = 0;
+	struct resmon_reg *rreg;
+
+	rreg = malloc(sizeof(*rreg));
+	if (rreg == NULL)
+		return NULL;
+
+	for (int i = 0; i < ARRAY_SIZE(rsrc_en.enabled); i++) {
+		if (rsrc_en.enabled[i])
+			regmask |= resmon_reg_resource_regmask[i];
+	}
+
+	*rreg = (struct resmon_reg) {
+		.rsrc_en = rsrc_en,
+		.regmask = regmask,
+	};
+	return rreg;
+}
+
+void resmon_reg_destroy(struct resmon_reg *rreg)
+{
+	free(rreg);
+}
 
 typedef struct {
 	uint16_t value;
@@ -114,9 +177,10 @@ static int resmon_reg_delete_rc(int rc, char **error)
 	return 0;
 }
 
-static int resmon_reg_handle_ralue(struct resmon_stat *stat,
-				   const uint8_t *payload, size_t payload_len,
-				   char **error)
+static int
+resmon_reg_handle_ralue(struct resmon_stat *stat, struct resmon_reg *rreg,
+			const uint8_t *payload, size_t payload_len,
+			char **error)
 {
 	enum mlxsw_reg_ralxx_protocol protocol;
 	const struct resmon_reg_ralue *reg;
@@ -134,6 +198,11 @@ static int resmon_reg_handle_ralue(struct resmon_stat *stat,
 	virtual_router = resmon_reg_ralue_virtual_router(reg);
 
 	ipv6 = protocol == MLXSW_REG_RALXX_PROTOCOL_IPV6;
+
+	if ((ipv6 && !rreg->rsrc_en.enabled[RESMON_RSRC_LPM_IPV6]) ||
+	    (!ipv6 && !rreg->rsrc_en.enabled[RESMON_RSRC_LPM_IPV4]))
+		return 0;
+
 	if (ipv6)
 		memcpy(dip.dip, reg->dip6, sizeof(reg->dip6));
 	else
@@ -159,12 +228,35 @@ oob:
 	return -1;
 }
 
-int resmon_reg_process_emad(struct resmon_stat *stat,
+static unsigned int resmon_reg_register_as_regmask(uint16_t reg_id)
+{
+#define RESMON_REG_REGISTER_AS_REGMASK_CASE(NAME)		\
+		case MLXSW_REG_ ## NAME ## _ID:			\
+			return RESMON_REG_REGMASK_ ## NAME;
+
+	switch (reg_id) {
+	RESMON_REG_REGISTERS(RESMON_REG_REGISTER_AS_REGMASK_CASE)
+	};
+	assert(false);
+	abort();
+
+#undef RESMON_REG_REGISTER_AS_REGMASK_CASE
+}
+
+static bool
+resmon_reg_should_handle(const struct resmon_reg *rreg, uint16_t reg_id)
+{
+	return (rreg->regmask & resmon_reg_register_as_regmask(reg_id)) != 0;
+}
+
+int resmon_reg_process_emad(struct resmon_reg *rreg,
+			    struct resmon_stat *stat,
 			    const uint8_t *buf, size_t len, char **error)
 {
 	const struct resmon_reg_reg_tlv_head *reg_tlv;
 	const struct resmon_reg_op_tlv *op_tlv;
 	struct resmon_reg_emad_tl tl;
+	uint16_t reg_id;
 
 	op_tlv = RESMON_REG_READ(sizeof(*op_tlv), buf, len);
 	tl = resmon_reg_emad_decode_tl(op_tlv->type_len);
@@ -188,9 +280,14 @@ int resmon_reg_process_emad(struct resmon_stat *stat,
 	/* Get to the register payload. */
 	RESMON_REG_PULL(sizeof(*reg_tlv), buf, len);
 
-	switch (uint16_be_toh(op_tlv->reg_id)) {
+	reg_id = uint16_be_toh(op_tlv->reg_id);
+
+	if (!resmon_reg_should_handle(rreg, reg_id))
+		return 0;
+
+	switch (reg_id) {
 	case MLXSW_REG_RALUE_ID:
-		return resmon_reg_handle_ralue(stat, buf, len, error);
+		return resmon_reg_handle_ralue(stat, rreg, buf, len, error);
 	}
 
 	resmon_fmterr(error, "EMAD malformed: Unknown register");
