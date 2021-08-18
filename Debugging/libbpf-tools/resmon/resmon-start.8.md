@@ -9,7 +9,7 @@ switches
 SYNOPSIS
 ========
 
-`resmon start [mode {hw | mock}]`
+`resmon start [mode {hw | mock}] [[include | exclude] resources RES1 RES2 ...`
 
 DESCRIPTION
 ===========
@@ -46,6 +46,32 @@ seen in `journalctl -t resmon`.
 
 PARAMETERS
 ==========
+
+`[include | exclude] resources <RES> <RES> <...>`
+
+: It is possible to configure a subset of resources that `resmon` is
+    supposed to monitor. This will save the memory and some processing time
+    that would be necessary for bookkeeping of uninterested resources. The
+    list of resources to monitor needs to be selected when the daemon is
+    started:
+
+    ```shell
+    $ resmon start resources lpm_ipv4 lpm_ipv6
+    ```
+
+    It is also possible to request monitoring of a group of resources. E.g.
+    `lpm_ipv4` and `lpm_ipv6` are grouped together in a group named `lpm`:
+
+    ```shell
+    $ resmon start resources lpm
+    ```
+
+    It is also possible to monitor all resources except of an excluded few.
+    E.g. to exclude LPM resources:
+
+    ```shell
+    $ resmon start exclude resources lpm
+    ```
 
 `mode {mock | hw}`
 

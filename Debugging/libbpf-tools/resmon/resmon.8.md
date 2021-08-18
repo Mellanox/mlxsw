@@ -28,7 +28,9 @@ client using the [JSON RPC][] protocol.
 Partial support is available on NVIDIA Spectrum-1 switches: KVDL-based
 resources will not be tracked properly, because KVDL in Spectrum-1 switches
 is managed by software, not firmware, and therefore the release events will
-not be seen by `resmon`.
+not be seen by `resmon`. When running on Spectrum-1, it is therefore
+reasonable to exclude KVDL resources from being monitored. See
+`resmon-start(8)` for details on how to do that.
 
 ## Method of Operation
 
