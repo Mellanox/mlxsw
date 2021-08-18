@@ -74,3 +74,6 @@ enum mlxsw_reg_ptce3_op {
 	 /* Read operation */
 	 MLXSW_REG_PTCE3_OP_QUERY_READ = 0,
 };
+
+#define MLXSW_REG_PEFA_ID 0x300F
+#define MLXSW_REG_IEDR_ID 0x3804

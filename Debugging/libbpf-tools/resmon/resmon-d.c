@@ -509,6 +509,12 @@ static const struct resmon_d_resgrp_info resmon_d_resgrp_info[] = {
 			[RESMON_RSRC_LPM_IPV6] = true,
 		}}
 	},
+	{
+		"kvdl",
+		{{
+			[RESMON_RSRC_ACTSET] = true,
+		}}
+	},
 };
 
 #undef RESMON_D_RSRC_AS_RESGRP_INFO

@@ -137,6 +137,7 @@ int resmon_c_stats(int argc, char **argv);
 	X(LPM_IPV4, "IPv4 LPM")				\
 	X(LPM_IPV6, "IPv6 LPM")				\
 	X(ATCAM, "ATCAM")				\
+	X(ACTSET, "ACL Action Set")			\
 	/**/
 
 enum resmon_resource {
@@ -217,6 +218,12 @@ int resmon_stat_ptce3_free(struct resmon_stat *stat,
 		       uint16_t delta_start,
 		       uint8_t erp_id);
 
+int resmon_stat_kvdl_alloc(struct resmon_stat *stat,
+			   uint32_t index,
+			   struct resmon_stat_kvd_alloc kvd_alloc);
+int resmon_stat_kvdl_free(struct resmon_stat *stat,
+			  uint32_t index,
+			  struct resmon_stat_kvd_alloc kvd_alloc);
 
 /* resmon-dl.c */
 

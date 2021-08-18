@@ -123,6 +123,8 @@ int BPF_PROG(handle__devlink_hwmsg,
 	case 0x8013: /* MLXSW_REG_RALUE_ID */
 	case 0x3006: /* MLXSW_REG_PTAR_ID */
 	case 0x3027: /* MLXSW_REG_PTCE3_ID */
+	case 0x300F: /* MLXSW_REG_PEFA_ID */
+	case 0x3804: /* MLXSW_REG_IEDR_ID */
 		return push_to_ringbuf(buf, len);
 	};
 	return 0;
