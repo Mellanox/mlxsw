@@ -13,7 +13,8 @@ libcommon.a-OBJECTS := \
 all: $(OUTPUT)/libcommon.a
 
 $(OUTPUT)/libcommon.a: $(libcommon.a-OBJECTS)
-	ar cr $@ $^
+	$(call msg,AR,$@)
+	$(Q)ar cr $@ $^
 
 $(OUTPUT):
 	$(call msg,MKDIR,$@)
