@@ -146,6 +146,108 @@ reg_tlv=$ralue_type_len$a_op_protocol$ralue_payload
 
 resmon_stats_test $(op_tlv_get $reg_id)$string_tlv$reg_tlv$end_tlv LPM_IPV6 -1
 
+############### PTAR - tcam region allocate ###############
+reg_id=3006
+
+reg_tlv="180d0000\
+00020051\
+00000010\
+00000002\
+00000000\
+00001002\
+14044101\
+02030506\
+11124400\
+3a139010\
+11121415\
+38399200\
+00000000"
+
+resmon_stats_no_change_test $(op_tlv_get $reg_id)$string_tlv$reg_tlv$end_tlv
+
+################## PTCE-3 - insert entry ##################
+reg_id=3027
+
+ptce_payload="0000000\
+0007fffe\
+00000000\
+00000000\
+00001002\
+14044101\
+02030506\
+11124400\
+00000000\
+00000000\
+00000000\
+00000000\
+c6336401\
+00000000\
+00000008\
+00000000\
+00000000\
+00000000\
+00000000\
+00d43100\
+00000000\
+00110000\
+00000000\
+00000000\
+00000000\
+00000000\
+00000000\
+00000000\
+00000000\
+00000000\
+00000000\
+00000000\
+00000000\
+00000000\
+00000000\
+00000000\
+00000000\
+00000000\
+00000000\
+000000000\
+00003ea00"
+
+ptce_reg_tlv_get()
+{
+	local v=$1; shift
+
+	local type_len="183d0000"
+	local region_id_dup=$(printf '%*s' 150 | tr ' ' "0")
+
+	echo $type_len$v$ptce_payload$region_id_dup
+}
+
+resmon_stats_test \
+	$(op_tlv_get $reg_id)$string_tlv$(ptce_reg_tlv_get 8)$end_tlv ATCAM 2
+
+################# PTAR - tcam region free #################
+reg_id=3006
+
+reg_tlv="180d0000\
+00020051\
+00000010\
+00000002\
+00000000\
+00001002\
+14044101\
+02030506\
+11124400\
+3a139010\
+11121415\
+38399200\
+00000000"
+
+resmon_stats_no_change_test $(op_tlv_get $reg_id)$string_tlv$reg_tlv$end_tlv
+
+################### PTCE-3 - remove entry ##################
+reg_id=3027
+
+resmon_stats_test \
+	$(op_tlv_get $reg_id)$string_tlv$(ptce_reg_tlv_get 0)$end_tlv ATCAM -2
+
 ####################### Stop resmon #######################
 $RESMON stop
 
