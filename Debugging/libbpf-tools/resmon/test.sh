@@ -302,6 +302,68 @@ test_iedr_reg_tlv()
 
 test_iedr_reg_tlv "23" "0003ea" ACTSET -1
 
+############## RAUHT - add IPv4 host table ################
+reg_id=8014
+
+reg_tlv="181e0000\
+00010002\
+00000000\
+00000000\
+00000000"
+
+ipv4_dip="$(printf '%*s' 24 | tr ' ' "0")c0243a00"
+empty_fields=$(printf '%*s' 156 | tr ' ' "0")
+mac="001122334455"
+
+reg_tlv=$reg_tlv$ipv4_dip$empty_fields$mac
+
+resmon_stats_test \
+	$(op_tlv_get $reg_id)$string_tlv$reg_tlv$end_tlv HOSTTAB_IPV4 1
+
+############## RAUHT - delete IPv4 host table ##############
+reg_id=8014
+
+reg_tlv="181e0000\
+00310002\
+00000000\
+00000000\
+00000000"
+
+reg_tlv=$reg_tlv$ipv4_dip$empty_fields$mac
+
+resmon_stats_test \
+	$(op_tlv_get $reg_id)$string_tlv$reg_tlv$end_tlv HOSTTAB_IPV4 -1
+
+############### RAUHT - add IPv6 host table ################
+reg_id=8014
+
+reg_tlv="181e0000\
+01010002\
+00000000\
+00000000\
+00000000"
+
+ipv6_dip="20010db8000900000000000000000005"
+
+reg_tlv=$reg_tlv$ipv6_dip$empty_fields$mac
+
+resmon_stats_test \
+	$(op_tlv_get $reg_id)$string_tlv$reg_tlv$end_tlv HOSTTAB_IPV6 2
+
+############## RAUHT - delete IPv6 host table ##############
+reg_id=8014
+
+reg_tlv="181e0000\
+01310002\
+00000000\
+00000000\
+00000000"
+
+reg_tlv=$reg_tlv$ipv6_dip$empty_fields$mac
+
+resmon_stats_test \
+	$(op_tlv_get $reg_id)$string_tlv$reg_tlv$end_tlv HOSTTAB_IPV6 -2
+
 ####################### Stop resmon #######################
 $RESMON stop
 
