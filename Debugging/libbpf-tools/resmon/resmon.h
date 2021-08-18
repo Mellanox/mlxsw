@@ -138,6 +138,8 @@ int resmon_c_stats(int argc, char **argv);
 	X(LPM_IPV6, "IPv6 LPM")				\
 	X(ATCAM, "ATCAM")				\
 	X(ACTSET, "ACL Action Set")			\
+	X(HOSTTAB_IPV4, "IPv4 Host Table")		\
+	X(HOSTTAB_IPV6, "IPv6 Host Table")		\
 	/**/
 
 enum resmon_resource {
@@ -224,6 +226,16 @@ int resmon_stat_kvdl_alloc(struct resmon_stat *stat,
 int resmon_stat_kvdl_free(struct resmon_stat *stat,
 			  uint32_t index,
 			  struct resmon_stat_kvd_alloc kvd_alloc);
+
+int resmon_stat_rauht_update(struct resmon_stat *stat,
+			     enum mlxsw_reg_ralxx_protocol protocol,
+			     uint16_t rif,
+			     struct resmon_stat_dip dip,
+			     struct resmon_stat_kvd_alloc kvda);
+int resmon_stat_rauht_delete(struct resmon_stat *stat,
+			     enum mlxsw_reg_ralxx_protocol protocol,
+			     uint16_t rif,
+			     struct resmon_stat_dip dip);
 
 /* resmon-dl.c */
 

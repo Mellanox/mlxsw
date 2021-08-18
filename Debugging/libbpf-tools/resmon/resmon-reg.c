@@ -14,6 +14,7 @@
 	X(PTCE3)			\
 	X(PEFA)				\
 	X(IEDR)				\
+	X(RAUHT)			\
 	/**/
 
 #define RESMON_REG_REGISTER_AS_ENUM(NAME)	\
@@ -38,6 +39,8 @@ enum {
 #define RESMON_REG_ACTSET_REGMASK	(RESMON_REG_REGMASK_PTCE3 |	\
 					 RESMON_REG_REGMASK_PEFA |	\
 					 RESMON_REG_REGMASK_IEDR)
+#define RESMON_REG_HOSTTAB_IPV4_REGMASK	RESMON_REG_REGMASK_RAUHT
+#define RESMON_REG_HOSTTAB_IPV6_REGMASK	RESMON_REG_REGMASK_RAUHT
 
 #define RESMON_REG_RSRC_AS_REGMASK(NAME, DESCRIPTION)		\
 	[RESMON_RSRC_ ## NAME] = RESMON_REG_ ## NAME ## _REGMASK,
@@ -237,6 +240,28 @@ struct resmon_reg_iedr {
 	uint32_be_t resv5;
 
 	struct resmon_reg_iedr_record records[64];
+};
+
+struct resmon_reg_rauht {
+	uint8_t __type;
+	uint8_t __op;
+	uint16_be_t __rif;
+
+#define resmon_reg_rauht_type(reg) ((reg)->__type & 0x03)
+#define resmon_reg_rauht_op(reg) (((reg)->__op & 0x70) >> 4)
+#define resmon_reg_rauht_rif(reg) (uint16_be_toh((reg)->__rif) & 0x70)
+
+	uint32_be_t resv1;
+	uint32_be_t resv2;
+	uint32_be_t resv3;
+
+	union {
+		uint8_t dip6[16];
+		struct {
+			uint8_t resv4[12];
+			uint8_t dip4[4];
+		};
+	};
 };
 
 static struct resmon_reg_emad_tl
@@ -523,6 +548,47 @@ oob:
 	return -1;
 }
 
+static int resmon_reg_handle_rauht(struct resmon_stat *stat,
+				   const uint8_t *payload, size_t payload_len,
+				   char **error)
+{
+	enum mlxsw_reg_ralxx_protocol protocol;
+	const struct resmon_reg_rauht *reg;
+	struct resmon_stat_kvd_alloc kvda;
+	struct resmon_stat_dip dip = {};
+	uint16_t rif;
+	bool ipv6;
+	int rc;
+
+	reg = RESMON_REG_READ(sizeof(*reg), payload, payload_len);
+
+	protocol = resmon_reg_rauht_type(reg);
+	rif = resmon_reg_rauht_rif(reg);
+
+	ipv6 = protocol == MLXSW_REG_RALXX_PROTOCOL_IPV6;
+	if (ipv6)
+		memcpy(dip.dip, reg->dip6, sizeof(reg->dip6));
+	else
+		memcpy(dip.dip, reg->dip4, sizeof(reg->dip4));
+
+	if (resmon_reg_rauht_op(reg) == MLXSW_REG_RAUHT_OP_WRITE_DELETE) {
+		rc = resmon_stat_rauht_delete(stat, protocol, rif, dip);
+		return resmon_reg_delete_rc(rc, error);
+	}
+
+	kvda = (struct resmon_stat_kvd_alloc) {
+		.slots = ipv6 ? 2 : 1,
+		.resource = ipv6 ? RESMON_RSRC_HOSTTAB_IPV6
+				 : RESMON_RSRC_HOSTTAB_IPV4,
+	};
+	rc = resmon_stat_rauht_update(stat, protocol, rif, dip, kvda);
+	return resmon_reg_insert_rc(rc, error);
+
+oob:
+	resmon_reg_err_payload_truncated(error);
+	return -1;
+}
+
 static unsigned int resmon_reg_register_as_regmask(uint16_t reg_id)
 {
 #define RESMON_REG_REGISTER_AS_REGMASK_CASE(NAME)		\
@@ -591,6 +657,8 @@ int resmon_reg_process_emad(struct resmon_reg *rreg,
 		return resmon_reg_handle_pefa(stat, buf, len, error);
 	case MLXSW_REG_IEDR_ID:
 		return resmon_reg_handle_iedr(stat, buf, len, error);
+	case MLXSW_REG_RAUHT_ID:
+		return resmon_reg_handle_rauht(stat, buf, len, error);
 	}
 
 	resmon_fmterr(error, "EMAD malformed: Unknown register");

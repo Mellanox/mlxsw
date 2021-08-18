@@ -77,3 +77,31 @@ enum mlxsw_reg_ptce3_op {
 
 #define MLXSW_REG_PEFA_ID 0x300F
 #define MLXSW_REG_IEDR_ID 0x3804
+
+#define MLXSW_REG_RAUHT_ID 0x8014
+
+enum mlxsw_reg_rauht_op {
+	/* Read operation */
+	MLXSW_REG_RAUHT_OP_QUERY_READ = 0,
+	/* Clear on read operation. Used to read entry and clear
+	 * activity bit.
+	 */
+	MLXSW_REG_RAUHT_OP_QUERY_CLEAR_ON_READ = 1,
+	/* Add. Used to write a new entry to the table. All R/W fields are
+	 * relevant for new entry. Activity bit is set for new entries.
+	 */
+	MLXSW_REG_RAUHT_OP_WRITE_ADD = 0,
+	/* Update action. Used to update an existing route entry and
+	 * only update the following fields:
+	 * trap_action, trap_id, mac, counter_set_type, counter_index
+	 */
+	MLXSW_REG_RAUHT_OP_WRITE_UPDATE = 1,
+	/* Clear activity. A bit is cleared for the entry. */
+	MLXSW_REG_RAUHT_OP_WRITE_CLEAR_ACTIVITY = 2,
+	/* Delete entry */
+	MLXSW_REG_RAUHT_OP_WRITE_DELETE = 3,
+	/* Delete all host entries on a RIF. In this command, dip
+	 * field is reserved.
+	 */
+	MLXSW_REG_RAUHT_OP_WRITE_DELETE_ALL = 4,
+};

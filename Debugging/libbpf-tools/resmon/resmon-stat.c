@@ -143,12 +143,35 @@ resmon_stat_kvdl_key(uint32_t index, enum resmon_resource resource)
 RESMON_STAT_KEY_HASH_FN(resmon_stat_kvdl_hash, struct resmon_stat_kvdl_key);
 RESMON_STAT_KEY_EQ_FN(resmon_stat_kvdl_eq, struct resmon_stat_kvdl_key);
 
+struct resmon_stat_rauht_key {
+	struct resmon_stat_key base;
+	enum mlxsw_reg_ralxx_protocol protocol;
+	uint16_t rif;
+	struct resmon_stat_dip dip;
+};
+
+static struct resmon_stat_rauht_key
+resmon_stat_rauht_key(enum mlxsw_reg_ralxx_protocol protocol,
+		      uint16_t rif,
+		      struct resmon_stat_dip dip)
+{
+	return (struct resmon_stat_rauht_key) {
+		.protocol = protocol,
+		.rif = rif,
+		.dip = dip,
+	};
+}
+
+RESMON_STAT_KEY_HASH_FN(resmon_stat_rauht_hash, struct resmon_stat_rauht_key);
+RESMON_STAT_KEY_EQ_FN(resmon_stat_rauht_eq, struct resmon_stat_rauht_key);
+
 struct resmon_stat {
 	struct resmon_stat_gauges gauges;
 	struct lh_table *ralue;
 	struct lh_table *ptar;
 	struct lh_table *ptce3;
 	struct lh_table *kvdl;
+	struct lh_table *rauht;
 };
 
 static struct resmon_stat_kvd_alloc *
@@ -170,6 +193,7 @@ struct resmon_stat *resmon_stat_create(void)
 	struct lh_table *ptce3_tab;
 	struct lh_table *ptar_tab;
 	struct lh_table *kvdl_tab;
+	struct lh_table *rauht_tab;
 	struct resmon_stat *stat;
 
 	stat = malloc(sizeof(*stat));
@@ -200,14 +224,23 @@ struct resmon_stat *resmon_stat_create(void)
 	if (kvdl_tab == NULL)
 		goto free_ptce3_tab;
 
+	rauht_tab = lh_table_new(1, resmon_stat_entry_free,
+				 resmon_stat_rauht_hash,
+				 resmon_stat_rauht_eq);
+	if (rauht_tab == NULL)
+		goto free_kvdl_tab;
+
 	*stat = (struct resmon_stat){
 		.ralue = ralue_tab,
 		.ptar = ptar_tab,
 		.ptce3 = ptce3_tab,
 		.kvdl = kvdl_tab,
+		.rauht = rauht_tab,
 	};
 	return stat;
 
+free_kvdl_tab:
+	lh_table_free(kvdl_tab);
 free_ptce3_tab:
 	lh_table_free(ptce3_tab);
 free_ptar_tab:
@@ -221,6 +254,7 @@ free_stat:
 
 void resmon_stat_destroy(struct resmon_stat *stat)
 {
+	lh_table_free(stat->rauht);
 	lh_table_free(stat->kvdl);
 	lh_table_free(stat->ptce3);
 	lh_table_free(stat->ptar);
@@ -455,6 +489,30 @@ resmon_stat_ptce3_free(struct resmon_stat *stat,
 				      delta_value, delta_start, erp_id);
 
 	return resmon_stat_lh_delete(stat, stat->ptce3, &key.base);
+}
+
+int resmon_stat_rauht_update(struct resmon_stat *stat,
+			     enum mlxsw_reg_ralxx_protocol protocol,
+			     uint16_t rif,
+			     struct resmon_stat_dip dip,
+			     struct resmon_stat_kvd_alloc kvd_alloc)
+{
+	struct resmon_stat_rauht_key key =
+		resmon_stat_rauht_key(protocol, rif, dip);
+
+	return resmon_stat_lh_update(stat, stat->rauht,
+				     &key.base, sizeof(key), kvd_alloc);
+}
+
+int resmon_stat_rauht_delete(struct resmon_stat *stat,
+			     enum mlxsw_reg_ralxx_protocol protocol,
+			     uint16_t rif,
+			     struct resmon_stat_dip dip)
+{
+	struct resmon_stat_rauht_key key =
+		resmon_stat_rauht_key(protocol, rif, dip);
+
+	return resmon_stat_lh_delete(stat, stat->rauht, &key.base);
 }
 
 static int resmon_stat_kvdl_alloc_1(struct resmon_stat *stat,

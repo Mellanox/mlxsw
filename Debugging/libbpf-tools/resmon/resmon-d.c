@@ -510,6 +510,13 @@ static const struct resmon_d_resgrp_info resmon_d_resgrp_info[] = {
 		}}
 	},
 	{
+		"hosttab",
+		{{
+			[RESMON_RSRC_HOSTTAB_IPV4] = true,
+			[RESMON_RSRC_HOSTTAB_IPV6] = true,
+		}}
+	},
+	{
 		"kvdl",
 		{{
 			[RESMON_RSRC_ACTSET] = true,
