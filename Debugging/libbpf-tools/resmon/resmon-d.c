@@ -514,7 +514,8 @@ static const struct resmon_d_resgrp_info resmon_d_resgrp_info[] = {
 #undef RESMON_D_RSRC_AS_RESGRP_INFO
 
 static int resmon_d_enable_resources(const char *name,
-				     struct resmon_resources_enabled *rsrc_en)
+				     struct resmon_resources_enabled *rsrc_en,
+				     bool include)
 {
 	const struct resmon_d_resgrp_info *info;
 
@@ -523,8 +524,12 @@ static int resmon_d_enable_resources(const char *name,
 		if (strcasecmp(name, info->name) != 0)
 			continue;
 
-		for (size_t j = 0; j < ARRAY_SIZE(info->rsrc_en.enabled); j++)
-			rsrc_en->enabled[j] |= info->rsrc_en.enabled[j];
+		for (size_t j = 0; j < ARRAY_SIZE(info->rsrc_en.enabled); j++) {
+			if (include)
+				rsrc_en->enabled[j] |= info->rsrc_en.enabled[j];
+			else
+				rsrc_en->enabled[j] &= !info->rsrc_en.enabled[j];
+		}
 
 		return 0;
 	}
@@ -533,13 +538,14 @@ static int resmon_d_enable_resources(const char *name,
 }
 
 static void resmon_d_resources_fill(int *p_argc, char ***p_argv,
-				    struct resmon_resources_enabled *rsrc_en)
+				    struct resmon_resources_enabled *rsrc_en,
+				    bool include)
 {
 	char **argv = *p_argv;
 	int argc = *p_argc;
 
 	while (argc > 0) {
-		if (resmon_d_enable_resources(*argv, rsrc_en) < 0)
+		if (resmon_d_enable_resources(*argv, rsrc_en, include) < 0)
 			goto out;
 
 		NEXT_ARG_FWD();
@@ -566,7 +572,7 @@ static void resmon_d_resource_name_print(const char *name)
 static void resmon_d_start_help(void)
 {
 	fprintf(stderr,
-		"Usage: resmon start [mode {hw | mock}] [resources RES RES ...]\n"
+		"Usage: resmon start [mode {hw | mock}] [[include | exclude] resources RES RES ...]\n"
 		"RES ::= [");
 
 	for (size_t i = 0; i < ARRAY_SIZE(resmon_d_resgrp_info); i++) {
@@ -600,9 +606,21 @@ int resmon_d_start(int argc, char **argv)
 				return -1;
 			}
 			NEXT_ARG_FWD();
+		} else if (strcmp(*argv, "include") == 0) {
+			NEXT_ARG();
+			if (strcmp(*argv, "resources") != 0)
+				goto incomplete_command;
+		} else if (strcmp(*argv, "exclude") == 0) {
+			NEXT_ARG();
+			if (strcmp(*argv, "resources") != 0)
+				goto incomplete_command;
+			NEXT_ARG();
+			resmon_d_set_all_resources(&rsrc_en);
+			resmon_d_resources_fill(&argc, &argv, &rsrc_en, false);
+			filter_resources = true;
 		} else if (strcmp(*argv, "resources") == 0) {
 			NEXT_ARG();
-			resmon_d_resources_fill(&argc, &argv, &rsrc_en);
+			resmon_d_resources_fill(&argc, &argv, &rsrc_en, true);
 			filter_resources = true;
 		} else if (strcmp(*argv, "help") == 0) {
 			resmon_d_start_help();
