@@ -248,6 +248,60 @@ reg_id=3027
 resmon_stats_test \
 	$(op_tlv_get $reg_id)$string_tlv$(ptce_reg_tlv_get 0)$end_tlv ATCAM -2
 
+######## PEFA - accesse to a flexible action entry ########
+reg_id=300f
+
+type_len="182d000000"
+index="0003ea"
+pefa_payload="01000000\
+08000000\
+00000000\
+03000004\
+00000000\
+00000000\
+00000000\
+00000000\
+00000000\
+03000000\
+02000003\
+000001c3\
+00000000\
+00000000\
+00000000\
+00000000\
+00000000"
+
+action2_to_action4=$(printf '%*s' 191 | tr ' ' "0")
+type_next_goto_record="01000000024000000"
+
+reg_tlv=$type_len$index$pefa_payload$action2_to_action4$type_next_goto_record
+
+resmon_stats_test \
+	$(op_tlv_get $reg_id)$string_tlv$reg_tlv$end_tlv ACTSET 1
+
+####### IEDR - delete the entry from the entry table #######
+
+test_iedr_reg_tlv()
+{
+	local type=$1; shift
+	local index=$1; shift
+	local gauge_name=$1; shift
+	local num_entries=$1; shift
+
+
+	local reg_id=3804
+	local prefix="1885000000000001000000000000000000000000"
+	local size="00000100"
+	local empty_records=$(printf '%*s' 1008 | tr ' ' "0")
+
+	reg_tlv=$prefix$type$size$index$empty_records
+
+	resmon_stats_test \
+		$(op_tlv_get $reg_id)$string_tlv$reg_tlv$end_tlv $gauge_name $num_entries
+}
+
+test_iedr_reg_tlv "23" "0003ea" ACTSET -1
+
 ####################### Stop resmon #######################
 $RESMON stop
 
