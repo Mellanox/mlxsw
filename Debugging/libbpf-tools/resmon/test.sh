@@ -148,4 +148,35 @@ resmon_stats_test $(op_tlv_get $reg_id)$string_tlv$reg_tlv$end_tlv LPM_IPV6 -1
 
 ####################### Stop resmon #######################
 $RESMON stop
+
+############## Start resmon - filter resources ############
+
+$RESMON start mode mock include resources lpm_ipv4 &> /dev/null &
+sleep 1
+
+################## RALUE - add IPv6 route ##################
+reg_id=8013
+
+a_op_protocol="01010000"
+ralue_payload="00010000\
+00000040\
+20010db8\
+00010000\
+00000000\
+00000000\
+80400001\
+00000000\
+00000001\
+00000000\
+00000000\
+00000000\
+00000000"
+
+reg_tlv=$ralue_type_len$a_op_protocol$ralue_payload
+
+resmon_stats_no_change_test $(op_tlv_get $reg_id)$string_tlv$reg_tlv$end_tlv
+
+###################### Stop resmon #######################
+$RESMON stop
+
 exit $EXIT_STATUS
