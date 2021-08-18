@@ -9,7 +9,10 @@
 #include "resmon.h"
 
 #define RESMON_REG_REGISTERS(X)		\
-	X(RALUE)
+	X(RALUE)			\
+	X(PTAR)				\
+	X(PTCE3)			\
+	/**/
 
 #define RESMON_REG_REGISTER_AS_ENUM(NAME)	\
 	RESMON_REG_REG_ ## NAME,
@@ -28,6 +31,8 @@ enum {
 
 #define RESMON_REG_LPM_IPV4_REGMASK	RESMON_REG_REGMASK_RALUE
 #define RESMON_REG_LPM_IPV6_REGMASK	RESMON_REG_REGMASK_RALUE
+#define RESMON_REG_ATCAM_REGMASK	(RESMON_REG_REGMASK_PTAR |	\
+					 RESMON_REG_REGMASK_PTCE3)
 
 #define RESMON_REG_RSRC_AS_REGMASK(NAME, DESCRIPTION)		\
 	[RESMON_RSRC_ ## NAME] = RESMON_REG_ ## NAME ## _REGMASK,
@@ -74,9 +79,18 @@ typedef struct {
 	uint16_t value;
 } uint16_be_t;
 
+typedef struct {
+	uint32_t value;
+} uint32_be_t;
+
 static inline uint16_t uint16_be_toh(uint16_be_t be)
 {
 	return be16toh(be.value);
+}
+
+static inline uint32_t uint32_be_toh(uint32_be_t be)
+{
+	return be32toh(be.value);
 }
 
 struct resmon_reg_emad_tl {
@@ -124,6 +138,65 @@ struct resmon_reg_ralue {
 			uint8_t dip4[4];
 		};
 	};
+};
+
+struct resmon_reg_ptar {
+	uint8_t __op_e;
+	uint8_t action_set_type;
+	uint8_t resv1;
+	uint8_t key_type;
+
+#define resmon_reg_ptar_op(reg) ((reg)->__op_e >> 4)
+
+	uint16_be_t resv2;
+	uint16_be_t __region_size;
+
+	uint16_be_t resv3;
+	uint16_be_t __region_id;
+
+	uint16_be_t resv4;
+	uint8_t __dup_opt;
+	uint8_t __packet_rate;
+
+	uint8_t tcam_region_info[16];
+	uint8_t flexible_keys[16];
+};
+
+struct resmon_reg_ptce3 {
+	uint8_t __v_a;
+	uint8_t __op;
+	uint8_t resv1;
+	uint8_t __dup;
+
+#define resmon_reg_ptce3_v(reg) ((reg)->__v_a >> 7)
+#define resmon_reg_ptce3_op(reg) (((reg)->__op >> 4) & 7)
+
+	uint32_be_t __priority;
+
+	uint32_be_t resv2;
+
+	uint32_be_t resv3;
+
+	uint8_t tcam_region_info[16];
+
+	uint8_t flex2_key_blocks[96];
+
+	uint16_be_t resv4;
+	uint8_t resv5;
+	uint8_t __erp_id;
+
+#define resmon_reg_ptce3_erp_id(reg) ((reg)->__erp_id & 0xf)
+
+	uint16_be_t resv6;
+	uint16_be_t __delta_start;
+
+#define resmon_reg_ptce3_delta_start(reg) \
+	(uint16_be_toh((reg)->__delta_start) & 0x3ff)
+
+	uint8_t resv7;
+	uint8_t delta_mask;
+	uint8_t resv8;
+	uint8_t delta_value;
 };
 
 static struct resmon_reg_emad_tl
@@ -228,6 +301,114 @@ oob:
 	return -1;
 }
 
+static struct resmon_stat_kvd_alloc
+resmon_reg_ptar_get_kvd_alloc(const struct resmon_reg_ptar *reg)
+{
+	size_t nkeys = 0;
+
+	for (size_t i = 0; i < sizeof(reg->flexible_keys); i++)
+		if (reg->flexible_keys[i])
+			nkeys++;
+
+	return (struct resmon_stat_kvd_alloc) {
+		.slots = nkeys >= 12 ? 4 :
+			 nkeys >= 4  ? 2 : 1,
+		.resource = RESMON_RSRC_ATCAM,
+	};
+}
+
+static int resmon_reg_handle_ptar(struct resmon_stat *stat,
+				  const uint8_t *payload, size_t payload_len,
+				  char **error)
+{
+	struct resmon_stat_tcam_region_info tcam_region_info;
+	struct resmon_stat_kvd_alloc kvd_alloc;
+	const struct resmon_reg_ptar *reg;
+	int rc;
+
+	reg = RESMON_REG_READ(sizeof(*reg), payload, payload_len);
+
+	switch (reg->key_type) {
+	case MLXSW_REG_PTAR_KEY_TYPE_FLEX:
+	case MLXSW_REG_PTAR_KEY_TYPE_FLEX2:
+		break;
+	default:
+		return 0;
+	}
+
+	memcpy(tcam_region_info.tcam_region_info, reg->tcam_region_info,
+	       sizeof(tcam_region_info.tcam_region_info));
+
+	switch (resmon_reg_ptar_op(reg)) {
+	case MLXSW_REG_PTAR_OP_RESIZE:
+	case MLXSW_REG_PTAR_OP_TEST:
+	default:
+		return 0;
+	case MLXSW_REG_PTAR_OP_ALLOC:
+		kvd_alloc = resmon_reg_ptar_get_kvd_alloc(reg);
+		rc = resmon_stat_ptar_alloc(stat, tcam_region_info, kvd_alloc);
+		return resmon_reg_insert_rc(rc, error);
+	case MLXSW_REG_PTAR_OP_FREE:
+		rc = resmon_stat_ptar_free(stat, tcam_region_info);
+		return resmon_reg_delete_rc(rc, error);
+	}
+
+oob:
+	resmon_reg_err_payload_truncated(error);
+	return -1;
+}
+
+static int resmon_reg_handle_ptce3(struct resmon_stat *stat,
+				   const uint8_t *payload, size_t payload_len,
+				   char **error)
+{
+	struct resmon_stat_tcam_region_info tcam_region_info;
+	struct resmon_stat_flex2_key_blocks key_blocks;
+	struct resmon_stat_kvd_alloc kvd_alloc;
+	const struct resmon_reg_ptce3 *reg;
+	int rc;
+
+	reg = RESMON_REG_READ(sizeof(*reg), payload, payload_len);
+
+	switch (resmon_reg_ptce3_op(reg)) {
+	case MLXSW_REG_PTCE3_OP_WRITE_WRITE:
+	case MLXSW_REG_PTCE3_OP_WRITE_UPDATE:
+		break;
+	default:
+		return 0;
+	}
+
+	memcpy(tcam_region_info.tcam_region_info, reg->tcam_region_info,
+	       sizeof(tcam_region_info.tcam_region_info));
+	memcpy(key_blocks.flex2_key_blocks, reg->flex2_key_blocks,
+	       sizeof(key_blocks.flex2_key_blocks));
+
+	if (resmon_reg_ptce3_v(reg)) {
+		rc = resmon_stat_ptar_get(stat, tcam_region_info, &kvd_alloc);
+		if (rc != 0)
+			return resmon_reg_insert_rc(rc, error);
+
+		rc = resmon_stat_ptce3_alloc(stat, tcam_region_info,
+					     &key_blocks, reg->delta_mask,
+					     reg->delta_value,
+					     resmon_reg_ptce3_delta_start(reg),
+					     resmon_reg_ptce3_erp_id(reg),
+					     kvd_alloc);
+		return resmon_reg_insert_rc(rc, error);
+	}
+
+	rc = resmon_stat_ptce3_free(stat, tcam_region_info,
+				    &key_blocks, reg->delta_mask,
+				    reg->delta_value,
+				    resmon_reg_ptce3_delta_start(reg),
+				    resmon_reg_ptce3_erp_id(reg));
+	return resmon_reg_delete_rc(rc, error);
+
+oob:
+	resmon_reg_err_payload_truncated(error);
+	return -1;
+}
+
 static unsigned int resmon_reg_register_as_regmask(uint16_t reg_id)
 {
 #define RESMON_REG_REGISTER_AS_REGMASK_CASE(NAME)		\
@@ -288,6 +469,10 @@ int resmon_reg_process_emad(struct resmon_reg *rreg,
 	switch (reg_id) {
 	case MLXSW_REG_RALUE_ID:
 		return resmon_reg_handle_ralue(stat, rreg, buf, len, error);
+	case MLXSW_REG_PTAR_ID:
+		return resmon_reg_handle_ptar(stat, buf, len, error);
+	case MLXSW_REG_PTCE3_ID:
+		return resmon_reg_handle_ptce3(stat, buf, len, error);
 	}
 
 	resmon_fmterr(error, "EMAD malformed: Unknown register");

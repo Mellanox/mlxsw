@@ -41,3 +41,36 @@ enum mlxsw_reg_ralue_op {
 	 */
 	MLXSW_REG_RALUE_OP_WRITE_DELETE = 3,
 };
+
+#define MLXSW_REG_PTAR_ID 0x3006
+
+enum mlxsw_reg_ptar_op {
+	/* allocate a TCAM region */
+	MLXSW_REG_PTAR_OP_ALLOC,
+	/* resize a TCAM region */
+	MLXSW_REG_PTAR_OP_RESIZE,
+	/* deallocate TCAM region */
+	MLXSW_REG_PTAR_OP_FREE,
+	/* test allocation */
+	MLXSW_REG_PTAR_OP_TEST,
+};
+
+enum mlxsw_reg_ptar_key_type {
+	MLXSW_REG_PTAR_KEY_TYPE_FLEX = 0x50, /* Spetrum */
+	MLXSW_REG_PTAR_KEY_TYPE_FLEX2 = 0x51, /* Spectrum-2 */
+};
+
+#define MLXSW_REG_PTCE3_ID 0x3027
+
+enum mlxsw_reg_ptce3_op {
+	/* Write operation. Used to write a new entry to the table.
+	 * All R/W fields are relevant for new entry. Activity bit is set
+	 * for new entries. Write with v = 0 will delete the entry. Must
+	 * not be used if an entry exists.
+	 */
+	 MLXSW_REG_PTCE3_OP_WRITE_WRITE = 0,
+	 /* Update operation */
+	 MLXSW_REG_PTCE3_OP_WRITE_UPDATE = 1,
+	 /* Read operation */
+	 MLXSW_REG_PTCE3_OP_QUERY_READ = 0,
+};

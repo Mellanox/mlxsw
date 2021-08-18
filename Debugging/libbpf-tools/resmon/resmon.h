@@ -133,9 +133,11 @@ int resmon_c_stats(int argc, char **argv);
 	RESMON_RSRC_ ## NAME,
 #define RESMON_RSRC_EXPAND_AS_PLUS1(...) + 1
 
-#define RESMON_RESOURCES(X) \
-	X(LPM_IPV4, "IPv4 LPM") \
-	X(LPM_IPV6, "IPv6 LPM")
+#define RESMON_RESOURCES(X)				\
+	X(LPM_IPV4, "IPv4 LPM")				\
+	X(LPM_IPV6, "IPv6 LPM")				\
+	X(ATCAM, "ATCAM")				\
+	/**/
 
 enum resmon_resource {
 	RESMON_RESOURCES(RESMON_RSRC_EXPAND_AS_ENUM)
@@ -161,6 +163,14 @@ struct resmon_stat_dip {
 	uint8_t dip[16];
 };
 
+struct resmon_stat_tcam_region_info {
+	uint8_t tcam_region_info[16];
+};
+
+struct resmon_stat_flex2_key_blocks {
+	uint8_t flex2_key_blocks[96];
+};
+
 struct resmon_stat_kvd_alloc {
 	unsigned int slots;
 	enum resmon_resource resource;
@@ -181,6 +191,31 @@ int resmon_stat_ralue_delete(struct resmon_stat *stat,
 			     uint8_t prefix_len,
 			     uint16_t virtual_router,
 			     struct resmon_stat_dip dip);
+
+int resmon_stat_ptar_alloc(struct resmon_stat *stat,
+			   struct resmon_stat_tcam_region_info region_info,
+			   struct resmon_stat_kvd_alloc kvda);
+int resmon_stat_ptar_free(struct resmon_stat *stat,
+			  struct resmon_stat_tcam_region_info region_info);
+int resmon_stat_ptar_get(struct resmon_stat *stat,
+			 struct resmon_stat_tcam_region_info region_info,
+			 struct resmon_stat_kvd_alloc *ret_kvd_alloc);
+
+int resmon_stat_ptce3_alloc(struct resmon_stat *stat,
+			struct resmon_stat_tcam_region_info tcam_region_info,
+			const struct resmon_stat_flex2_key_blocks *key_blocks,
+			uint8_t delta_mask,
+			uint8_t delta_value,
+			uint16_t delta_start,
+			uint8_t erp_id,
+			struct resmon_stat_kvd_alloc kvd_alloc);
+int resmon_stat_ptce3_free(struct resmon_stat *stat,
+		       struct resmon_stat_tcam_region_info tcam_region_info,
+		       const struct resmon_stat_flex2_key_blocks *key_blocks,
+		       uint8_t delta_mask,
+		       uint8_t delta_value,
+		       uint16_t delta_start,
+		       uint8_t erp_id);
 
 
 /* resmon-dl.c */
