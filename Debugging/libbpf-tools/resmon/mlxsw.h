@@ -105,3 +105,21 @@ enum mlxsw_reg_rauht_op {
 	 */
 	MLXSW_REG_RAUHT_OP_WRITE_DELETE_ALL = 4,
 };
+
+#define MLXSW_REG_RATR_ID 0x8008
+
+enum mlxsw_reg_ratr_op {
+	/* Read */
+	MLXSW_REG_RATR_OP_QUERY_READ = 0,
+	/* Read and clear activity */
+	MLXSW_REG_RATR_OP_QUERY_READ_CLEAR = 2,
+	/* Write Adjacency entry */
+	MLXSW_REG_RATR_OP_WRITE_WRITE_ENTRY = 1,
+	/* Write Adjacency entry only if the activity is cleared.
+	 * The write may not succeed if the activity is set. There is not
+	 * direct feedback if the write has succeeded or not, however
+	 * the get will reveal the actual entry (SW can compare the get
+	 * response to the set command).
+	 */
+	MLXSW_REG_RATR_OP_WRITE_WRITE_ENTRY_ON_ACTIVITY = 3,
+};

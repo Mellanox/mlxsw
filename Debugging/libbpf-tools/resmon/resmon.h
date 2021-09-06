@@ -140,6 +140,7 @@ int resmon_c_stats(int argc, char **argv);
 	X(ACTSET, "ACL Action Set")			\
 	X(HOSTTAB_IPV4, "IPv4 Host Table")		\
 	X(HOSTTAB_IPV6, "IPv6 Host Table")		\
+	X(ADJTAB, "Adjacency Table")			\
 	/**/
 
 enum resmon_resource {

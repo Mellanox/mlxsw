@@ -15,6 +15,7 @@
 	X(PEFA)				\
 	X(IEDR)				\
 	X(RAUHT)			\
+	X(RATR)				\
 	/**/
 
 #define RESMON_REG_REGISTER_AS_ENUM(NAME)	\
@@ -41,6 +42,8 @@ enum {
 					 RESMON_REG_REGMASK_IEDR)
 #define RESMON_REG_HOSTTAB_IPV4_REGMASK	RESMON_REG_REGMASK_RAUHT
 #define RESMON_REG_HOSTTAB_IPV6_REGMASK	RESMON_REG_REGMASK_RAUHT
+#define RESMON_REG_ADJTAB_REGMASK	(RESMON_REG_REGMASK_RATR |	\
+					 RESMON_REG_REGMASK_IEDR)
 
 #define RESMON_REG_RSRC_AS_REGMASK(NAME, DESCRIPTION)		\
 	[RESMON_RSRC_ ## NAME] = RESMON_REG_ ## NAME ## _REGMASK,
@@ -262,6 +265,30 @@ struct resmon_reg_rauht {
 			uint8_t dip4[4];
 		};
 	};
+};
+
+struct resmon_reg_ratr {
+	uint8_t __opcode_v;
+	uint8_t __a;
+	uint16_be_t __size;
+
+#define resmon_reg_ratr_opcode(reg) (((reg)->__opcode_v >> 4) & 0xf)
+
+	uint8_t __type;
+	uint8_t __table;
+	uint16_be_t __adj_index_low;
+
+#define resmon_reg_ratr_adj_index_low(reg) uint16_be_toh((reg)->__adj_index_low)
+
+	uint16_be_t resv1;
+	uint16_be_t __egress_router_interface;
+
+	uint8_t __trap_action;
+	uint8_t adj_index_high;
+
+#define resmon_reg_ratr_adj_index(reg) \
+	(((reg)->adj_index_high << (uint32_t)16) | \
+	 resmon_reg_ratr_adj_index_low(reg))
 };
 
 static struct resmon_reg_emad_tl
@@ -504,6 +531,9 @@ static int resmon_reg_handle_iedr_record(struct resmon_stat *stat,
 	uint32_t size;
 
 	switch (record.type) {
+	case 0x21:
+		resource = RESMON_RSRC_ADJTAB;
+		break;
 	case 0x23:
 		resource = RESMON_RSRC_ACTSET;
 		break;
@@ -589,6 +619,33 @@ oob:
 	return -1;
 }
 
+static int resmon_reg_handle_ratr(struct resmon_stat *stat,
+				  const uint8_t *payload, size_t payload_len,
+				  char **error)
+{
+	const struct resmon_reg_ratr *reg;
+	struct resmon_stat_kvd_alloc kvda;
+	int rc;
+
+	reg = RESMON_REG_READ(sizeof(*reg), payload, payload_len);
+
+	kvda = (struct resmon_stat_kvd_alloc) {
+		.slots = 1,
+		.resource = RESMON_RSRC_ADJTAB,
+	};
+
+	if (resmon_reg_ratr_opcode(reg) == MLXSW_REG_RATR_OP_WRITE_WRITE_ENTRY) {
+		rc = resmon_stat_kvdl_alloc(stat,
+					    resmon_reg_ratr_adj_index(reg),
+					    kvda);
+		return resmon_reg_insert_rc(rc, error);
+	}
+
+oob:
+	resmon_reg_err_payload_truncated(error);
+	return -1;
+}
+
 static unsigned int resmon_reg_register_as_regmask(uint16_t reg_id)
 {
 #define RESMON_REG_REGISTER_AS_REGMASK_CASE(NAME)		\
@@ -659,6 +716,8 @@ int resmon_reg_process_emad(struct resmon_reg *rreg,
 		return resmon_reg_handle_iedr(stat, buf, len, error);
 	case MLXSW_REG_RAUHT_ID:
 		return resmon_reg_handle_rauht(stat, buf, len, error);
+	case MLXSW_REG_RATR_ID:
+		return resmon_reg_handle_ratr(stat, buf, len, error);
 	}
 
 	resmon_fmterr(error, "EMAD malformed: Unknown register");

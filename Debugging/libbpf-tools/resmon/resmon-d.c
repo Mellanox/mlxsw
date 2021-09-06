@@ -520,6 +520,7 @@ static const struct resmon_d_resgrp_info resmon_d_resgrp_info[] = {
 		"kvdl",
 		{{
 			[RESMON_RSRC_ACTSET] = true,
+			[RESMON_RSRC_ADJTAB] = true,
 		}}
 	},
 };
