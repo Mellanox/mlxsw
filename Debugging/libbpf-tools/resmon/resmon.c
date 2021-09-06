@@ -10,7 +10,7 @@
 struct resmon_env env = {
 	.verbosity = 0,
 };
-const char *program_version = "resmon 0.0";
+const char *program_version = "resmon 1.0";
 const char *program_bug_address = "<mlxsw@nvidia.com>";
 
 static int resmon_help(void)
@@ -19,7 +19,7 @@ static int resmon_help(void)
 	     "\n"
 	     "Usage: resmon [OPTIONS] { COMMAND | help }\n"
 	     "where  OPTIONS := [ -h | --help | -q | --quiet | -v | --verbose |\n"
-	     "			  -V | --version | --sockdir <DIR> ]\n"
+	     "			  -V | --version | --sockdir <DIR> | --json ]\n"
 	     "	     COMMAND := { start | stop | ping | emad | stats }\n"
 	     );
 	return 0;
@@ -54,9 +54,11 @@ int main(int argc, char **argv)
 {
 	enum {
 		opt_sockaddr = 257,
+		opt_json,
 	};
 	static const struct option long_options[] = {
 		{ "help",	no_argument,	   NULL, 'h' },
+		{ "json",	no_argument,	   NULL, opt_json },
 		{ "quiet",	no_argument,	   NULL, 'q' },
 		{ "verbose",	no_argument,	   NULL, 'v' },
 		{ "version",	no_argument,	   NULL, 'V' },
@@ -84,6 +86,9 @@ int main(int argc, char **argv)
 			break;
 		case opt_sockaddr:
 			env.sockdir = optarg;
+			break;
+		case opt_json:
+			env.show_json = true;
 			break;
 		default:
 			fprintf(stderr, "Unknown option.\n");

@@ -10,7 +10,7 @@ SYNOPSIS
 
 `resmon -V`
 
-`resmon [-v | -q] [--sockdir <PATH>] {start | stop | ping | emad | stats}`
+`resmon [-v | -q] [--json] [--sockdir <PATH>] {start | stop | ping | emad | stats}`
 
 DESCRIPTION
 ===========
@@ -66,6 +66,18 @@ OPTIONS
 
     The command-line argument `--sockdir` allows overriding of this default
     location.
+
+`--json`
+
+: When displaying the response sent by the daemon back to the client,
+    instead of interpreting it and formatting in a human-readable way, dump
+    the JSON result object instead, if any. Errors, including interpreted
+    valid JSON RPC error response, are still dumped to standard error as
+    usual.
+
+    Please see manual pages for the individual client commands to
+    understand the result object format. The man pages document full
+    response object, the result is returned under the `result` key.
 
 COMMANDS
 ========

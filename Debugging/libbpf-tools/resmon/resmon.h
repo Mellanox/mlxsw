@@ -29,6 +29,7 @@
 extern struct resmon_env {
 	const char *sockdir;
 	int verbosity;
+	bool show_json;
 } env;
 
 int resmon_fmterr(char **strp, const char *fmt, ...)

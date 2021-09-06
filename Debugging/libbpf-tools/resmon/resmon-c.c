@@ -80,6 +80,19 @@ static bool resmon_c_handle_response(struct json_object *j, int expect_id,
 	return true;
 }
 
+static bool resmon_c_result_show_json(struct json_object *result)
+{
+	const char *dump;
+
+	if (env.show_json) {
+		dump = json_object_to_json_string(result);
+		fprintf(stdout, "%s\n", dump);
+		return true;
+	}
+
+	return false;
+}
+
 static struct json_object *resmon_c_send_request(struct json_object *request)
 {
 	struct json_object *response_obj = NULL;
@@ -177,6 +190,11 @@ static int resmon_c_ping_jrpc(void)
 		goto put_response;
 	}
 
+	if (resmon_c_result_show_json(result)) {
+		err = 0;
+		goto put_result;
+	}
+
 	nr = json_object_get_int(result);
 	if (nr != r) {
 		fprintf(stderr, "Unexpected ping response: sent %d, got %d.\n",
@@ -240,10 +258,16 @@ static int resmon_c_stop_jrpc(void)
 		goto put_response;
 	}
 
+	if (resmon_c_result_show_json(result)) {
+		err = 0;
+		goto put_result;
+	}
+
 	if (env.verbosity > 0)
 		fprintf(stderr, "resmond will stop\n");
 	err = 0;
 
+put_result:
 	json_object_put(result);
 put_response:
 	json_object_put(response);
@@ -320,9 +344,15 @@ static int resmon_c_emad_jrpc(const char *payload, size_t payload_len)
 		goto put_response;
 	}
 
+	if (resmon_c_result_show_json(result)) {
+		err = 0;
+		goto put_result;
+	}
+
 	if (env.verbosity > 0)
 		fprintf(stderr, "resmond took the EMAD\n");
 
+put_result:
 	json_object_put(result);
 put_response:
 	json_object_put(response);
@@ -448,6 +478,11 @@ static int resmon_c_stats_jrpc(void)
 				      &result)) {
 		err = -1;
 		goto put_response;
+	}
+
+	if (resmon_c_result_show_json(result)) {
+		err = 0;
+		goto put_result;
 	}
 
 	err = resmon_jrpc_dissect_stats(result, &gauges, &num_gauges,

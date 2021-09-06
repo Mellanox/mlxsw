@@ -41,15 +41,13 @@ resmon_stats_test()
 	local val_before
 	local val_after
 
-	val_before=$((echo -n '{ "jsonrpc": "2.0", "id": 1, "method": "stats" }'; \
-		sleep 0.2) | nc -U --udp resmon.ctl | \
-		jq ".result.gauges[] | select(.name == \"$gauge_name\")".value)
+	val_before=$($RESMON --json stats | \
+		jq ".gauges[] | select(.name == \"$gauge_name\")".value)
 
 	$RESMON emad string "$payload"
 
-	val_after=$((echo -n '{ "jsonrpc": "2.0", "id": 1, "method": "stats" }'; \
-		sleep 0.2) | nc -U --udp resmon.ctl | \
-		jq ".result.gauges[] | select(.name == \"$gauge_name\")".value)
+	val_after=$($RESMON --json stats | \
+		jq ".gauges[] | select(.name == \"$gauge_name\")".value)
 
 	expected_val=$((val_before + $num_entries))
 
