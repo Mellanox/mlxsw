@@ -364,6 +364,33 @@ reg_tlv=$reg_tlv$ipv6_dip$empty_fields$mac
 resmon_stats_test \
 	$(op_tlv_get $reg_id)$string_tlv$reg_tlv$end_tlv HOSTTAB_IPV6 -2
 
+############## RATR - add Adjacency table ################
+reg_id=8008
+
+type_len="180c0000"
+a_v_opcode="110000000000"
+index_low="0002"
+egress_router_iface="0000000300"
+index_high="01"
+
+ratr_payload="00000000\
+b8599fa6\
+276d0000\
+00000000\
+00000000\
+00000000\
+00000000\
+0000"
+
+reg_tlv=$type_len$a_v_opcode$index_low$egress_router_iface$index_high$ratr_payload
+
+resmon_stats_test \
+	$(op_tlv_get $reg_id)$string_tlv$reg_tlv$end_tlv ADJTAB 1
+
+############## IEDR - delete Adjacency table ##############
+
+test_iedr_reg_tlv "21" "010002" ADJTAB -1
+
 ####################### Stop resmon #######################
 $RESMON stop
 
