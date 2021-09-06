@@ -192,6 +192,10 @@ enum resmon_stat_sfd_param_type {
 	RESMON_STAT_SFD_PARAM_TYPE_TUNNEL_PORT,
 };
 
+#define RESMON_STAT_SFD_MATCH_FID		(1<<0)
+#define RESMON_STAT_SFD_MATCH_PARAM_TYPE	(1<<1)
+#define RESMON_STAT_SFD_MATCH_PARAM		(1<<2)
+
 struct resmon_stat *resmon_stat_create(void);
 void resmon_stat_destroy(struct resmon_stat *stat);
 struct resmon_stat_gauges resmon_stat_gauges(struct resmon_stat *stat);
@@ -256,6 +260,10 @@ resmon_stat_sfd_update(struct resmon_stat *stat, struct resmon_stat_mac mac,
 		       uint16_t param, struct resmon_stat_kvd_alloc kvd_alloc);
 int resmon_stat_sfd_delete(struct resmon_stat *stat, struct resmon_stat_mac mac,
 			   uint16_t fid);
+
+int resmon_stat_sfdf_flush(struct resmon_stat *stat, uint16_t fid,
+			   enum resmon_stat_sfd_param_type param_type,
+			   uint16_t param, uint8_t flags);
 
 /* resmon-dl.c */
 

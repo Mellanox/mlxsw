@@ -17,6 +17,7 @@
 	X(RAUHT)			\
 	X(RATR)				\
 	X(SFD)				\
+	X(SFDF)				\
 	/**/
 
 #define RESMON_REG_REGISTER_AS_ENUM(NAME)	\
@@ -45,7 +46,8 @@ enum {
 #define RESMON_REG_HOSTTAB_IPV6_REGMASK	RESMON_REG_REGMASK_RAUHT
 #define RESMON_REG_ADJTAB_REGMASK	(RESMON_REG_REGMASK_RATR |	\
 					 RESMON_REG_REGMASK_IEDR)
-#define RESMON_REG_FDB_REGMASK		RESMON_REG_REGMASK_SFD
+#define RESMON_REG_FDB_REGMASK		(RESMON_REG_REGMASK_SFD |	\
+					 RESMON_REG_REGMASK_SFDF)
 
 #define RESMON_REG_RSRC_AS_REGMASK(NAME, DESCRIPTION)		\
 	[RESMON_RSRC_ ## NAME] = RESMON_REG_ ## NAME ## _REGMASK,
@@ -343,6 +345,82 @@ struct resmon_reg_sfd {
 	uint32_be_t resv4;
 
 	struct resmon_reg_sfd_record records[32];
+};
+
+struct resmon_reg_sfdf_param_flush_fid {
+	uint32_t resv1;
+	uint16_t resv2;
+	uint16_be_t fid;
+#define resmon_reg_sfdf_param_flush_fid(reg) (uint16_be_toh((reg)->flush_fid.fid))
+};
+
+struct resmon_reg_sfdf_param_flush_port {
+	uint32_t resv1;
+	uint16_t resv2;
+	uint16_be_t system_port;
+#define resmon_reg_sfdf_param_flush_port(reg) \
+		(uint16_be_toh((reg)->flush_port.system_port))
+};
+
+struct resmon_reg_sfdf_param_flush_port_fid {
+	uint16_t resv1;
+	uint16_be_t system_port;
+#define resmon_reg_sfdf_param_flush_port_fid_port(reg) \
+		(uint16_be_toh((reg)->flush_port_fid.system_port))
+	uint16_t resv2;
+	uint16_be_t fid;
+#define resmon_reg_sfdf_param_flush_port_fid_fid(reg) \
+		(uint16_be_toh((reg)->flush_port_fid.fid))
+};
+
+struct resmon_reg_sfdf_param_flush_lag {
+	uint32_t resv1;
+	uint16_t resv2;
+	uint16_be_t lag_id;
+#define resmon_reg_sfdf_param_flush_lag(reg) \
+		(uint16_be_toh((reg)->flush_lag.lag_id) & 0x3ff)
+};
+
+struct resmon_reg_sfdf_param_flush_lag_fid {
+	uint16_t resv1;
+	uint16_be_t lag_id;
+#define resmon_reg_sfdf_param_flush_lag_fid_lag_id(reg) \
+		(uint16_be_toh((reg)->flush_lag_fid.lag_id) & 0x3ff)
+	uint16_t resv2;
+	uint16_be_t fid;
+#define resmon_reg_sfdf_param_flush_lag_fid_fid(reg) \
+		(uint16_be_toh((reg)->flush_lag_fid.fid))
+};
+
+struct resmon_reg_sfdf_param_flush_nve_fid {
+	uint32_t resv1;
+	uint16_t resv2;
+	uint16_be_t fid;
+#define resmon_reg_sfdf_param_flush_nve_fid(reg) \
+		(uint16_be_toh((reg)->flush_nve_fid.fid))
+};
+
+struct resmon_reg_sfdf {
+	uint8_t swid;
+	uint8_t resv1;
+	uint16_t resv2;
+	uint8_t __flushtype_imdu_iut_st;
+
+#define resmon_reg_sfdf_flush_type(reg) \
+		(((reg)->__flushtype_imdu_iut_st & 0xf0) >> 4)
+
+	uint8_t resv3;
+	uint16_t resv4;
+
+	union {
+		uint64_t resv5; /* FLUSH_PER_SWID, FLUSH_PER_NVE */
+		struct resmon_reg_sfdf_param_flush_fid flush_fid;
+		struct resmon_reg_sfdf_param_flush_port flush_port;
+		struct resmon_reg_sfdf_param_flush_port_fid flush_port_fid;
+		struct resmon_reg_sfdf_param_flush_lag flush_lag;
+		struct resmon_reg_sfdf_param_flush_lag_fid flush_lag_fid;
+		struct resmon_reg_sfdf_param_flush_nve_fid flush_nve_fid;
+	};
 };
 
 static struct resmon_reg_emad_tl
@@ -789,6 +867,74 @@ oob:
 	return -1;
 }
 
+static int resmon_reg_handle_sfdf(struct resmon_stat *stat,
+				  const uint8_t *payload, size_t payload_len,
+				  char **error)
+{
+	enum resmon_stat_sfd_param_type param_type = 0;
+	const struct resmon_reg_sfdf *reg;
+	uint8_t flush_type, flags = 0;
+	uint16_t fid = 0, param = 0;
+
+	reg = RESMON_REG_READ(sizeof(*reg), payload, payload_len);
+
+	flush_type = resmon_reg_sfdf_flush_type(reg);
+
+	switch (flush_type) {
+	case MLXSW_REG_SFDF_FLUSH_PER_FID:
+		fid = resmon_reg_sfdf_param_flush_fid(reg);
+		flags |= RESMON_STAT_SFD_MATCH_FID;
+		break;
+	case MLXSW_REG_SFDF_FLUSH_PER_PORT:
+		param = resmon_reg_sfdf_param_flush_port(reg);
+		param_type = RESMON_STAT_SFD_PARAM_TYPE_SYSTEM_PORT;
+		flags |= RESMON_STAT_SFD_MATCH_PARAM;
+		flags |= RESMON_STAT_SFD_MATCH_PARAM_TYPE;
+		break;
+	case MLXSW_REG_SFDF_FLUSH_PER_PORT_AND_FID:
+		fid = resmon_reg_sfdf_param_flush_port_fid_fid(reg);
+		param = resmon_reg_sfdf_param_flush_port_fid_port(reg);
+		param_type = RESMON_STAT_SFD_PARAM_TYPE_SYSTEM_PORT;
+		flags |= RESMON_STAT_SFD_MATCH_FID;
+		flags |= RESMON_STAT_SFD_MATCH_PARAM;
+		flags |= RESMON_STAT_SFD_MATCH_PARAM_TYPE;
+		break;
+	case MLXSW_REG_SFDF_FLUSH_PER_LAG:
+		param = resmon_reg_sfdf_param_flush_lag(reg);
+		param_type = RESMON_STAT_SFD_PARAM_TYPE_LAG;
+		flags |= RESMON_STAT_SFD_MATCH_PARAM;
+		flags |= RESMON_STAT_SFD_MATCH_PARAM_TYPE;
+		break;
+	case MLXSW_REG_SFDF_FLUSH_PER_LAG_AND_FID:
+		fid = resmon_reg_sfdf_param_flush_lag_fid_fid(reg);
+		param = resmon_reg_sfdf_param_flush_lag_fid_lag_id(reg);
+		param_type = RESMON_STAT_SFD_PARAM_TYPE_LAG;
+		flags |= RESMON_STAT_SFD_MATCH_FID;
+		flags |= RESMON_STAT_SFD_MATCH_PARAM;
+		flags |= RESMON_STAT_SFD_MATCH_PARAM_TYPE;
+		break;
+	case MLXSW_REG_SFDF_FLUSH_PER_NVE:
+		param_type = RESMON_STAT_SFD_PARAM_TYPE_TUNNEL_PORT;
+		flags |= RESMON_STAT_SFD_MATCH_PARAM_TYPE;
+		break;
+	case MLXSW_REG_SFDF_FLUSH_PER_NVE_AND_FID:
+		fid = resmon_reg_sfdf_param_flush_nve_fid(reg);
+		param_type = RESMON_STAT_SFD_PARAM_TYPE_TUNNEL_PORT;
+		flags |= RESMON_STAT_SFD_MATCH_FID;
+		flags |= RESMON_STAT_SFD_MATCH_PARAM_TYPE;
+		break;
+	case MLXSW_REG_SFDF_FLUSH_PER_SWID: /* swid is reserved for Spectrum */
+	default:
+		return -1;
+	}
+
+	return resmon_stat_sfdf_flush(stat, fid, param_type, param, flags);
+
+oob:
+	resmon_reg_err_payload_truncated(error);
+	return -1;
+}
+
 static unsigned int resmon_reg_register_as_regmask(uint16_t reg_id)
 {
 #define RESMON_REG_REGISTER_AS_REGMASK_CASE(NAME)		\
@@ -863,6 +1009,8 @@ int resmon_reg_process_emad(struct resmon_reg *rreg,
 		return resmon_reg_handle_ratr(stat, buf, len, error);
 	case MLXSW_REG_SFD_ID:
 		return resmon_reg_handle_sfd(stat, buf, len, error);
+	case MLXSW_REG_SFDF_ID:
+		return resmon_reg_handle_sfdf(stat, buf, len, error);
 	}
 
 	resmon_fmterr(error, "EMAD malformed: Unknown register");

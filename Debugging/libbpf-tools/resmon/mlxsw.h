@@ -160,3 +160,28 @@ enum mlxsw_reg_sfd_rec_type {
 	MLXSW_REG_SFD_REC_TYPE_MULTICAST = 0x2,
 	MLXSW_REG_SFD_REC_TYPE_UNICAST_TUNNEL = 0xC,
 };
+
+#define MLXSW_REG_SFDF_ID 0x2013
+
+enum mlxsw_reg_sfdf_flush_type {
+	/* All SWID dynamic entries are flushed. */
+	MLXSW_REG_SFDF_FLUSH_PER_SWID,
+	/* All FID dynamic entries are flushed. */
+	MLXSW_REG_SFDF_FLUSH_PER_FID,
+	/* All dynamic entries pointing to port are flushed. */
+	MLXSW_REG_SFDF_FLUSH_PER_PORT,
+	/* All FID dynamic entries pointing to port are flushed. */
+	MLXSW_REG_SFDF_FLUSH_PER_PORT_AND_FID,
+	/* All dynamic entries pointing to LAG are flushed. */
+	MLXSW_REG_SFDF_FLUSH_PER_LAG,
+	/* All FID dynamic entries pointing to LAG are flushed. */
+	MLXSW_REG_SFDF_FLUSH_PER_LAG_AND_FID,
+	/* All entries of type "Unicast Tunnel" or "Multicast Tunnel" are
+	 * flushed.
+	 */
+	MLXSW_REG_SFDF_FLUSH_PER_NVE,
+	/* All entries of type "Unicast Tunnel" or "Multicast Tunnel" are
+	 * flushed, per FID.
+	 */
+	MLXSW_REG_SFDF_FLUSH_PER_NVE_AND_FID,
+};

@@ -708,3 +708,55 @@ resmon_stat_sfd_update(struct resmon_stat *stat, struct resmon_stat_mac mac,
 	return resmon_stat_lh_sfd_insert(stat, &key, hash, param_type, param,
 					 kvd_alloc);
 }
+
+static bool resmon_stat_sfd_keys_match(uint16_t fid1, uint16_t fid2,
+				       uint8_t flags)
+{
+	if ((flags & RESMON_STAT_SFD_MATCH_FID) && fid1 != fid2)
+		return false;
+
+	return true;
+}
+
+static bool
+resmon_stat_sfd_vals_match(enum resmon_stat_sfd_param_type param_type1,
+			   enum resmon_stat_sfd_param_type param_type2,
+			   uint16_t param1, uint16_t param2, uint8_t flags)
+{
+	if ((flags & RESMON_STAT_SFD_MATCH_PARAM_TYPE) &&
+	     param_type1 != param_type2)
+		return false;
+
+	if ((flags & RESMON_STAT_SFD_MATCH_PARAM) && param1 != param2)
+		return false;
+
+	return true;
+}
+
+int resmon_stat_sfdf_flush(struct resmon_stat *stat, uint16_t fid,
+			   enum resmon_stat_sfd_param_type param_type,
+			   uint16_t param, uint8_t flags)
+{
+	const struct resmon_stat_sfd_key *key;
+	const struct resmon_stat_sfd_val *val;
+	struct lh_entry *e, *tmp;
+	int err;
+
+	lh_foreach_safe(stat->sfd, e, tmp) {
+		key = e->k;
+		val = e->v;
+
+		if (!resmon_stat_sfd_keys_match(key->fid, fid, flags))
+			continue;
+
+		if (!resmon_stat_sfd_vals_match(val->param_type, param_type,
+						val->param, param, flags))
+			continue;
+
+		err = resmon_stat_sfd_delete_entry(stat, e);
+		if (err)
+			return err;
+	}
+
+	return 0;
+}
