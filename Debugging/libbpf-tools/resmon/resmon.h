@@ -142,6 +142,9 @@ int resmon_c_stats(int argc, char **argv);
 	X(HOSTTAB_IPV6, "IPv6 Host Table")		\
 	X(ADJTAB, "Adjacency Table")			\
 	X(FDB, "FDB Entry")				\
+	X(VID2FID, "VID to FID Table")			\
+	X(RQ_VID2FID, "RQ, VID to FID Table")		\
+	X(VNI2FID, "VNI to FID Table")			\
 	/**/
 
 enum resmon_resource {
@@ -264,6 +267,14 @@ int resmon_stat_sfd_delete(struct resmon_stat *stat, struct resmon_stat_mac mac,
 int resmon_stat_sfdf_flush(struct resmon_stat *stat, uint16_t fid,
 			   enum resmon_stat_sfd_param_type param_type,
 			   uint16_t param, uint8_t flags);
+
+int resmon_stat_svfa_update(struct resmon_stat *stat,
+			    enum mlxsw_reg_svfa_mt mapping_table,
+			    uint16_t local_port, uint32_t vid_vni,
+			    struct resmon_stat_kvd_alloc kvd_alloc);
+int resmon_stat_svfa_delete(struct resmon_stat *stat,
+			    enum mlxsw_reg_svfa_mt mapping_table,
+			    uint16_t local_port, uint32_t vid_vni);
 
 /* resmon-dl.c */
 

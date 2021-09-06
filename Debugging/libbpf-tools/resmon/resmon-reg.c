@@ -18,6 +18,7 @@
 	X(RATR)				\
 	X(SFD)				\
 	X(SFDF)				\
+	X(SVFA)				\
 	/**/
 
 #define RESMON_REG_REGISTER_AS_ENUM(NAME)	\
@@ -48,6 +49,9 @@ enum {
 					 RESMON_REG_REGMASK_IEDR)
 #define RESMON_REG_FDB_REGMASK		(RESMON_REG_REGMASK_SFD |	\
 					 RESMON_REG_REGMASK_SFDF)
+#define RESMON_REG_VID2FID_REGMASK	RESMON_REG_REGMASK_SVFA
+#define RESMON_REG_RQ_VID2FID_REGMASK	RESMON_REG_REGMASK_SVFA
+#define RESMON_REG_VNI2FID_REGMASK	RESMON_REG_REGMASK_SVFA
 
 #define RESMON_REG_RSRC_AS_REGMASK(NAME, DESCRIPTION)		\
 	[RESMON_RSRC_ ## NAME] = RESMON_REG_ ## NAME ## _REGMASK,
@@ -421,6 +425,37 @@ struct resmon_reg_sfdf {
 		struct resmon_reg_sfdf_param_flush_lag_fid flush_lag_fid;
 		struct resmon_reg_sfdf_param_flush_nve_fid flush_nve_fid;
 	};
+};
+
+struct resmon_reg_svfa {
+	uint8_t __swid;
+	uint8_t __local_port;
+	uint8_t __local_port_msb_mapping_table;
+	uint8_t __tport_v;
+
+#define resmon_reg_svfa_mapping_table(reg) \
+	((reg)->__local_port_msb_mapping_table & 0x07)
+#define resmon_reg_svfa_local_port_msb(reg) \
+	((reg)->__local_port_msb_mapping_table >> 4)
+#define resmon_reg_svfa_local_port(reg)\
+	((resmon_reg_svfa_local_port_msb(reg) << (uint16_t)8) | \
+	 (reg)->__local_port)
+#define resmon_reg_svfa_v(reg) ((reg)->__tport_v & 1)
+
+	uint16_be_t __fid;
+	uint16_be_t __vid;
+
+#define resmon_reg_svfa_vid(reg) (uint16_be_toh((reg)->__vid) & 0x0fff)
+
+	uint32_be_t __counter_set_type_index;
+
+	uint8_t __trap_action;
+	uint8_t resv1;
+	uint16_be_t __trap_id;
+
+	uint32_be_t __vni;
+
+#define resmon_reg_svfa_vni(reg) (uint32_be_toh((reg)->__vni) & 0x00ffffff)
 };
 
 static struct resmon_reg_emad_tl
@@ -935,6 +970,59 @@ oob:
 	return -1;
 }
 
+static int resmon_reg_handle_svfa(struct resmon_stat *stat,
+				  const uint8_t *payload, size_t payload_len,
+				  char **error)
+{
+	enum mlxsw_reg_svfa_mt mapping_table;
+	const struct resmon_reg_svfa *reg;
+	struct resmon_stat_kvd_alloc kvda;
+	enum resmon_resource resource;
+	uint16_t local_port = 0;
+	uint32_t vid_vni;
+	int rc;
+
+	reg = RESMON_REG_READ(sizeof(*reg), payload, payload_len);
+
+	mapping_table = resmon_reg_svfa_mapping_table(reg);
+
+	switch (mapping_table) {
+	case MLXSW_REG_SVFA_MT_VID_TO_FID:
+		resource = RESMON_RSRC_VID2FID;
+		vid_vni = resmon_reg_svfa_vid(reg);
+		break;
+	case MLXSW_REG_SVFA_MT_PORT_VID_TO_FID:
+		resource = RESMON_RSRC_RQ_VID2FID;
+		local_port = resmon_reg_svfa_local_port(reg);
+		vid_vni = resmon_reg_svfa_vid(reg);
+		break;
+	case MLXSW_REG_SVFA_MT_VNI_TO_FID:
+		resource = RESMON_RSRC_VNI2FID;
+		vid_vni = resmon_reg_svfa_vni(reg);
+		break;
+	default:
+		return 0;
+	}
+
+	if (!resmon_reg_svfa_v(reg)) {
+		rc = resmon_stat_svfa_delete(stat, mapping_table, local_port,
+					     vid_vni);
+		return resmon_reg_delete_rc(rc, error);
+	}
+
+	kvda = (struct resmon_stat_kvd_alloc) {
+		.slots = 1,
+		.resource = resource,
+	};
+	rc = resmon_stat_svfa_update(stat, mapping_table, local_port, vid_vni,
+				     kvda);
+	return resmon_reg_insert_rc(rc, error);
+
+oob:
+	resmon_reg_err_payload_truncated(error);
+	return -1;
+}
+
 static unsigned int resmon_reg_register_as_regmask(uint16_t reg_id)
 {
 #define RESMON_REG_REGISTER_AS_REGMASK_CASE(NAME)		\
@@ -1011,6 +1099,8 @@ int resmon_reg_process_emad(struct resmon_reg *rreg,
 		return resmon_reg_handle_sfd(stat, buf, len, error);
 	case MLXSW_REG_SFDF_ID:
 		return resmon_reg_handle_sfdf(stat, buf, len, error);
+	case MLXSW_REG_SVFA_ID:
+		return resmon_reg_handle_svfa(stat, buf, len, error);
 	}
 
 	resmon_fmterr(error, "EMAD malformed: Unknown register");

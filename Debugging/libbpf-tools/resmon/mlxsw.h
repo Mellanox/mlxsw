@@ -185,3 +185,11 @@ enum mlxsw_reg_sfdf_flush_type {
 	 */
 	MLXSW_REG_SFDF_FLUSH_PER_NVE_AND_FID,
 };
+
+#define MLXSW_REG_SVFA_ID 0x201C
+
+enum mlxsw_reg_svfa_mt {
+	MLXSW_REG_SVFA_MT_VID_TO_FID,
+	MLXSW_REG_SVFA_MT_PORT_VID_TO_FID,
+	MLXSW_REG_SVFA_MT_VNI_TO_FID,
+};
