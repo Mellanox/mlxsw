@@ -439,6 +439,48 @@ resmon_stats_test \
 	$(op_tlv_get $reg_id)$string_tlv`
 	`$(sfdf_reg_payload_get $flush_type $fid)$end_tlv "FDB" -2
 
+############### SVFA - add VID to FID table ################
+
+test_svfa_reg_tlv()
+{
+	local port=$1; shift
+	local mapping_table=$1; shift
+	local valid=$1; shift
+	local counter_name=$1; shift
+	local num_entries=$1; shift
+
+	local reg_id="201C"
+	local reg_tlv="1805000000"
+	local svfa_payload="140000010000000000000000"
+
+	reg_tlv=$reg_tlv$port$mapping_table$valid$svfa_payload
+
+	resmon_stats_test \
+		$(op_tlv_get $reg_id)$string_tlv$reg_tlv$end_tlv $counter_name $num_entries
+}
+
+test_svfa_reg_tlv "00" "00" "01" VID2FID 1
+
+############## SVFA - add RQ, VID to FID table #############
+
+test_svfa_reg_tlv "32" "01" "01" RQ_VID2FID 1
+
+############## SVFA - add VNI to FID table #############
+
+test_svfa_reg_tlv "00" "02" "01" VNI2FID 1
+
+############## SVFA - delete VID to FID table ##############
+
+test_svfa_reg_tlv "00" "00" "00" VID2FID -1
+
+############# SVFA - delete RQ, VID to FID table ###########
+
+test_svfa_reg_tlv "32" "01" "00" RQ_VID2FID -1
+
+############# SVFA - delete VNI to FID table ###########
+
+test_svfa_reg_tlv "00" "02" "00" VNI2FID -1
+
 ####################### Stop resmon #######################
 $RESMON stop
 
