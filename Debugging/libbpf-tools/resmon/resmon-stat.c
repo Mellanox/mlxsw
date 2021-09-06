@@ -165,6 +165,30 @@ resmon_stat_rauht_key(enum mlxsw_reg_ralxx_protocol protocol,
 RESMON_STAT_KEY_HASH_FN(resmon_stat_rauht_hash, struct resmon_stat_rauht_key);
 RESMON_STAT_KEY_EQ_FN(resmon_stat_rauht_eq, struct resmon_stat_rauht_key);
 
+struct resmon_stat_sfd_key {
+	struct resmon_stat_key base;
+	struct resmon_stat_mac mac;
+	uint16_t fid;
+};
+
+static struct resmon_stat_sfd_key
+resmon_stat_sfd_key(struct resmon_stat_mac mac, uint16_t fid)
+{
+	return (struct resmon_stat_sfd_key) {
+		.mac = mac,
+		.fid = fid,
+	};
+}
+
+struct resmon_stat_sfd_val {
+	struct resmon_stat_kvd_alloc kvd_alloc;
+	enum resmon_stat_sfd_param_type param_type;
+	uint16_t param;
+};
+
+RESMON_STAT_KEY_HASH_FN(resmon_stat_sfd_hash, struct resmon_stat_sfd_key);
+RESMON_STAT_KEY_EQ_FN(resmon_stat_sfd_eq, struct resmon_stat_sfd_key);
+
 struct resmon_stat {
 	struct resmon_stat_gauges gauges;
 	struct lh_table *ralue;
@@ -172,6 +196,7 @@ struct resmon_stat {
 	struct lh_table *ptce3;
 	struct lh_table *kvdl;
 	struct lh_table *rauht;
+	struct lh_table *sfd; /* resmon_stat_sfd_key -> resmon_stat_sfd_val */
 };
 
 static struct resmon_stat_kvd_alloc *
@@ -195,6 +220,7 @@ struct resmon_stat *resmon_stat_create(void)
 	struct lh_table *kvdl_tab;
 	struct lh_table *rauht_tab;
 	struct resmon_stat *stat;
+	struct lh_table *sfd_tab;
 
 	stat = malloc(sizeof(*stat));
 	if (stat == NULL)
@@ -230,15 +256,24 @@ struct resmon_stat *resmon_stat_create(void)
 	if (rauht_tab == NULL)
 		goto free_kvdl_tab;
 
+	sfd_tab = lh_table_new(1, resmon_stat_entry_free,
+			       resmon_stat_sfd_hash,
+			       resmon_stat_sfd_eq);
+	if (sfd_tab == NULL)
+		goto free_rauht_tab;
+
 	*stat = (struct resmon_stat){
 		.ralue = ralue_tab,
 		.ptar = ptar_tab,
 		.ptce3 = ptce3_tab,
 		.kvdl = kvdl_tab,
 		.rauht = rauht_tab,
+		.sfd = sfd_tab,
 	};
 	return stat;
 
+free_rauht_tab:
+	lh_table_free(rauht_tab);
 free_kvdl_tab:
 	lh_table_free(kvdl_tab);
 free_ptce3_tab:
@@ -254,6 +289,7 @@ free_stat:
 
 void resmon_stat_destroy(struct resmon_stat *stat)
 {
+	lh_table_free(stat->sfd);
 	lh_table_free(stat->rauht);
 	lh_table_free(stat->kvdl);
 	lh_table_free(stat->ptce3);
@@ -575,4 +611,100 @@ int resmon_stat_kvdl_free(struct resmon_stat *stat,
 	}
 
 	return rc;
+}
+
+static int
+resmon_stat_lh_sfd_insert(struct resmon_stat *stat,
+			  struct resmon_stat_sfd_key *orig_key,
+			  long hash, enum resmon_stat_sfd_param_type param_type,
+			  uint16_t param,
+			  struct resmon_stat_kvd_alloc kvd_alloc)
+{
+	struct resmon_stat_sfd_val *val;
+	struct resmon_stat_key *key;
+	int rc;
+
+	key = resmon_stat_key_copy(&orig_key->base,
+				   sizeof(struct resmon_stat_sfd_key));
+	if (key == NULL)
+		return -ENOMEM;
+
+	val = malloc(sizeof(*val));
+	if (val == NULL)
+		goto free_key;
+
+	val->param_type = param_type;
+	val->param = param;
+	val->kvd_alloc = kvd_alloc;
+
+	rc = lh_table_insert_w_hash(stat->sfd, key, val, hash, 0);
+	if (rc)
+		goto free_val;
+
+	resmon_stat_gauge_inc(stat, kvd_alloc);
+
+	return 0;
+
+free_val:
+	free(val);
+free_key:
+	free(key);
+	return -1;
+}
+
+static int resmon_stat_sfd_delete_entry(struct resmon_stat *stat,
+					struct lh_entry *e)
+{
+	struct resmon_stat_kvd_alloc kvd_alloc;
+	const struct resmon_stat_sfd_val *vp;
+	int rc;
+
+	vp = e->v;
+	kvd_alloc = vp->kvd_alloc;
+
+	rc = lh_table_delete_entry(stat->sfd, e);
+	assert(rc == 0);
+	resmon_stat_gauge_dec(stat, kvd_alloc);
+	return 0;
+}
+
+int
+resmon_stat_sfd_delete(struct resmon_stat *stat, struct resmon_stat_mac mac,
+		       uint16_t fid)
+{
+	struct resmon_stat_sfd_key key;
+	struct lh_entry *e;
+	long hash;
+
+	key = resmon_stat_sfd_key(mac, fid);
+	hash = stat->sfd->hash_fn(&key.base);
+	e = lh_table_lookup_entry_w_hash(stat->sfd, &key.base, hash);
+	if (e == NULL)
+		return -1;
+
+	return resmon_stat_sfd_delete_entry(stat, e);
+}
+
+int
+resmon_stat_sfd_update(struct resmon_stat *stat, struct resmon_stat_mac mac,
+		       uint16_t fid, enum resmon_stat_sfd_param_type param_type,
+		       uint16_t param, struct resmon_stat_kvd_alloc kvd_alloc)
+{
+	struct resmon_stat_sfd_val *vp;
+	struct resmon_stat_sfd_key key;
+	struct lh_entry *e;
+	long hash;
+
+	key = resmon_stat_sfd_key(mac, fid);
+	hash = stat->sfd->hash_fn(&key.base);
+	e = lh_table_lookup_entry_w_hash(stat->sfd, &key.base, hash);
+	if (e != NULL) {
+		vp = lh_entry_v(e);
+		vp->param_type = param_type;
+		vp->param = param;
+		return 0;
+	}
+
+	return resmon_stat_lh_sfd_insert(stat, &key, hash, param_type, param,
+					 kvd_alloc);
 }

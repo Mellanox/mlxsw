@@ -51,8 +51,11 @@ static int push_to_ringbuf(const u8 *buf, size_t len)
 {
 	u8 *space;
 
-	if (len > 1024)
+	if (len > 2048)
 		return 0;
+
+	else if (len > 1024)
+		space = bpf_ringbuf_reserve(&ringbuf, 2048, 0);
 	else if (len > 512)
 		space = bpf_ringbuf_reserve(&ringbuf, 1024, 0);
 	else if (len > 256)
@@ -127,6 +130,7 @@ int BPF_PROG(handle__devlink_hwmsg,
 	case 0x3804: /* MLXSW_REG_IEDR_ID */
 	case 0x8014: /* MLXSW_REG_RAUHT_ID */
 	case 0x8008: /* MLXSW_REG_RATR_ID */
+	case 0x200A: /* MLXSW_REG_SFD_ID */
 		return push_to_ringbuf(buf, len);
 	};
 	return 0;

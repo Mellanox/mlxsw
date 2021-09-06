@@ -141,6 +141,7 @@ int resmon_c_stats(int argc, char **argv);
 	X(HOSTTAB_IPV4, "IPv4 Host Table")		\
 	X(HOSTTAB_IPV6, "IPv6 Host Table")		\
 	X(ADJTAB, "Adjacency Table")			\
+	X(FDB, "FDB Entry")				\
 	/**/
 
 enum resmon_resource {
@@ -167,6 +168,10 @@ struct resmon_stat_dip {
 	uint8_t dip[16];
 };
 
+struct resmon_stat_mac {
+	uint8_t mac[6];
+};
+
 struct resmon_stat_tcam_region_info {
 	uint8_t tcam_region_info[16];
 };
@@ -178,6 +183,13 @@ struct resmon_stat_flex2_key_blocks {
 struct resmon_stat_kvd_alloc {
 	unsigned int slots;
 	enum resmon_resource resource;
+};
+
+enum resmon_stat_sfd_param_type {
+	RESMON_STAT_SFD_PARAM_TYPE_SYSTEM_PORT = 1,
+	RESMON_STAT_SFD_PARAM_TYPE_LAG,
+	RESMON_STAT_SFD_PARAM_TYPE_MID,
+	RESMON_STAT_SFD_PARAM_TYPE_TUNNEL_PORT,
 };
 
 struct resmon_stat *resmon_stat_create(void);
@@ -237,6 +249,13 @@ int resmon_stat_rauht_delete(struct resmon_stat *stat,
 			     enum mlxsw_reg_ralxx_protocol protocol,
 			     uint16_t rif,
 			     struct resmon_stat_dip dip);
+
+int
+resmon_stat_sfd_update(struct resmon_stat *stat, struct resmon_stat_mac mac,
+		       uint16_t fid, enum resmon_stat_sfd_param_type param_type,
+		       uint16_t param, struct resmon_stat_kvd_alloc kvd_alloc);
+int resmon_stat_sfd_delete(struct resmon_stat *stat, struct resmon_stat_mac mac,
+			   uint16_t fid);
 
 /* resmon-dl.c */
 

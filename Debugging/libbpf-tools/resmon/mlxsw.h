@@ -123,3 +123,40 @@ enum mlxsw_reg_ratr_op {
 	 */
 	MLXSW_REG_RATR_OP_WRITE_WRITE_ENTRY_ON_ACTIVITY = 3,
 };
+
+#define MLXSW_REG_SFD_ID 0x200A
+
+enum mlxsw_reg_sfd_op {
+	/* Dump entire FDB a (process according to record_locator) */
+	MLXSW_REG_SFD_OP_QUERY_DUMP = 0,
+	/* Query records by {MAC, VID/FID} value */
+	MLXSW_REG_SFD_OP_QUERY_QUERY = 1,
+	/* Query and clear activity. Query records by {MAC, VID/FID} value */
+	MLXSW_REG_SFD_OP_QUERY_QUERY_AND_CLEAR_ACTIVITY = 2,
+	/* Test. Response indicates if each of the records could be
+	 * added to the FDB.
+	 */
+	MLXSW_REG_SFD_OP_WRITE_TEST = 0,
+	/* Add/modify. Aged-out records cannot be added. This command removes
+	 * the learning notification of the {MAC, VID/FID}. Response includes
+	 * the entries that were added to the FDB.
+	 */
+	MLXSW_REG_SFD_OP_WRITE_EDIT = 1,
+	/* Remove record by {MAC, VID/FID}. This command also removes
+	 * the learning notification and aged-out notifications
+	 * of the {MAC, VID/FID}. The response provides current (pre-removal)
+	 * entries as non-aged-out.
+	 */
+	MLXSW_REG_SFD_OP_WRITE_REMOVE = 2,
+	/* Remove learned notification by {MAC, VID/FID}. The response provides
+	 * the removed learning notification.
+	 */
+	MLXSW_REG_SFD_OP_WRITE_REMOVE_NOTIFICATION = 2,
+};
+
+enum mlxsw_reg_sfd_rec_type {
+	MLXSW_REG_SFD_REC_TYPE_UNICAST = 0x0,
+	MLXSW_REG_SFD_REC_TYPE_UNICAST_LAG = 0x1,
+	MLXSW_REG_SFD_REC_TYPE_MULTICAST = 0x2,
+	MLXSW_REG_SFD_REC_TYPE_UNICAST_TUNNEL = 0xC,
+};
