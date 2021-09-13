@@ -251,6 +251,11 @@ function emad_op_tlv(tvbuf, tree)
 	tree:add(pf_op_tlv_tid, tvbuf(8, 8))
 end
 
+function emad_op_tlv_method_is_event(tvbuf)
+	local method = tvbuf(6, 1):bitfield(1, 7)
+	return OP_TLV_METHOD[method] == "Event"
+end
+
 function emad_string_tlv(tvbuf, tree)
 	tree:add(pf_string_tlv_type, tvbuf(0, 1), tvbuf(0, 1):bitfield(0, 5))
 	emad_tlv_len_add(tvbuf, tree, pf_string_tlv_len)
@@ -289,13 +294,16 @@ function emad.dissector(tvbuf, pktinfo, root)
 	local op_tlv_len = emad_tlv_len_get(tvbuf:range(current_index))
 	local op_tlv_subtree = subtree:add(emad, tvbuf:range(current_index, op_tlv_len), "Operation TLV")
 	emad_op_tlv(tvbuf(current_index, op_tlv_len), op_tlv_subtree)
+	local is_event = emad_op_tlv_method_is_event(tvbuf(current_index, op_tlv_len))
 	current_index = current_index + op_tlv_len
 
 	-- string_tlv --
-	local string_tlv_len = emad_tlv_len_get(tvbuf:range(current_index))
-	local string_tlv_subtree = subtree:add(emad, tvbuf:range(current_index, string_tlv_len), "String TLV")
-	emad_string_tlv(tvbuf(current_index, string_tlv_len), string_tlv_subtree)
-	current_index = current_index + string_tlv_len
+	if not is_event then
+		local string_tlv_len = emad_tlv_len_get(tvbuf:range(current_index))
+		local string_tlv_subtree = subtree:add(emad, tvbuf:range(current_index, string_tlv_len), "String TLV")
+		emad_string_tlv(tvbuf(current_index, string_tlv_len), string_tlv_subtree)
+		current_index = current_index + string_tlv_len
+	end
 
 	-- reg_tlv --
 	local reg_tlv_len = emad_tlv_len_get(tvbuf:range(current_index))
@@ -304,9 +312,11 @@ function emad.dissector(tvbuf, pktinfo, root)
 	current_index = current_index + reg_tlv_len
 
 	-- end_tlv --
-	local end_tlv_len = emad_tlv_len_get(tvbuf:range(current_index))
-	local end_tlv_subtree = subtree:add(emad, tvbuf:range(current_index, end_tlv_len), "End TLV")
-	emad_end_tlv(tvbuf(current_index, end_tlv_len), end_tlv_subtree)
+	if not is_event then
+		local end_tlv_len = emad_tlv_len_get(tvbuf:range(current_index))
+		local end_tlv_subtree = subtree:add(emad, tvbuf:range(current_index, end_tlv_len), "End TLV")
+		emad_end_tlv(tvbuf(current_index, end_tlv_len), end_tlv_subtree)
+	end
 end
 
 --- Invoke our dissector only for packets with specific EtherType
