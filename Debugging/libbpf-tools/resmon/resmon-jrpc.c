@@ -197,6 +197,35 @@ struct resmon_jrpc_policy {
 	bool required;
 };
 
+static int resmon_jrpc_validate_array(struct json_object *obj,
+				      enum json_type elm_type,
+				      char **error)
+{
+	{
+		enum json_type type = json_object_get_type(obj);
+
+		if (type != json_type_array) {
+			resmon_fmterr(error, "Value expected to be an array, but is %s",
+				      json_type_to_name(type));
+			return -1;
+		}
+	}
+
+	for (size_t i = 0, len = json_object_array_length(obj); i < len; i++) {
+		struct json_object *elm = json_object_array_get_idx(obj, i);
+		enum json_type type = json_object_get_type(elm);
+
+		if (type != elm_type) {
+			resmon_fmterr(error, "Array element %zd is expected to be a %s, but is %s",
+				      i, json_type_to_name(elm_type),
+				      json_type_to_name(type));
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
 static int resmon_jrpc_dissect(struct json_object *obj,
 			       struct resmon_jrpc_policy policy[],
 			       bool seen[],
@@ -296,6 +325,25 @@ static int resmon_jrpc_extract_uint64(const char *key, struct json_object *obj,
 	}
 
 	*pvalue64 = (uint64_t) value;
+	return 0;
+}
+
+static int resmon_jrpc_extract_uint32(const char *key, struct json_object *obj,
+				      uint32_t *pvalue, char **error)
+{
+	uint64_t value64;
+	int err;
+
+	err = resmon_jrpc_extract_uint64(key, obj, &value64, error);
+	if (err != 0)
+		return err;
+
+	*pvalue = value64;
+	if (*pvalue != value64) {
+		resmon_fmterr(error, "Invalid %s: value too large", key);
+		return -1;
+	}
+
 	return 0;
 }
 
@@ -562,6 +610,121 @@ int resmon_jrpc_dissect_stats(struct json_object *obj,
 	return resmon_jrpc_dissect_stats_gauges(values[pol_gauges],
 						gauges, num_gauges,
 						error);
+}
+
+static int
+resmon_jrpc_dissect_tables_table(struct json_object *table_obj,
+				 struct resmon_jrpc_table *ptable,
+				 char **error)
+{
+	enum {
+		pol_name,
+		pol_nrows,
+		pol_seqnn,
+	};
+	struct resmon_jrpc_policy policy[] = {
+		[pol_name] =	 { .key = "name", .type = json_type_string,
+				   .required = true },
+		[pol_nrows] =	 { .key = "nrows", .type = json_type_int,
+				   .required = true },
+		[pol_seqnn] =	 { .key = "seqnn", .type = json_type_int,
+				   .required = true },
+	};
+	struct json_object *values[ARRAY_SIZE(policy)] = {};
+	bool seen[ARRAY_SIZE(policy)] = {};
+	uint32_t nrows;
+	uint32_t seqnn;
+	int err;
+
+	err = resmon_jrpc_dissect(table_obj, policy, seen, values,
+				  ARRAY_SIZE(policy), error);
+	if (err)
+		return err;
+
+	err = resmon_jrpc_extract_uint32(policy[pol_nrows].key,
+					 values[pol_nrows], &nrows, error);
+	if (err != 0)
+		return err;
+
+	err = resmon_jrpc_extract_uint32(policy[pol_seqnn].key,
+					 values[pol_seqnn], &seqnn, error);
+	if (err != 0)
+		return err;
+
+	*ptable = (struct resmon_jrpc_table) {
+		.name = json_object_get_string(values[pol_name]),
+		.nrows = nrows,
+		.seqnn = seqnn,
+	};
+	return 0;
+}
+
+static int
+resmon_jrpc_dissect_get_tables_tables(struct json_object *tables_array,
+				      struct resmon_jrpc_table **ptables,
+				      size_t *pnum_tables, char **error)
+{
+	size_t tables_array_len = json_object_array_length(tables_array);
+	struct resmon_jrpc_table *tables;
+
+	if (resmon_jrpc_validate_array(tables_array, json_type_object,
+				       error) != 0)
+		return -1;
+
+	tables = calloc(tables_array_len, sizeof(*tables));
+	if (tables == NULL) {
+		resmon_fmterr(error, "Couldn't allocate tables: %m");
+		return -1;
+	}
+
+	for (size_t i = 0; i < tables_array_len; i++) {
+		struct json_object *table_obj =
+			json_object_array_get_idx(tables_array, i);
+		struct resmon_jrpc_table *table = &tables[i];
+		int err;
+
+		err = resmon_jrpc_dissect_tables_table(table_obj, table, error);
+		if (err != 0)
+			goto free_tables;
+	}
+
+	*ptables = tables;
+	*pnum_tables = tables_array_len;
+	return 0;
+
+free_tables:
+	free(tables);
+	return -1;
+}
+
+int resmon_jrpc_dissect_get_tables(struct json_object *obj,
+				   struct resmon_jrpc_table **tables,
+				   size_t *num_tables, char **error)
+{
+	/* Result for query with "get_tables" method is supposed to look
+	 * like:
+	 *
+	 * { "tables": [ {"name": "$NAME", "nrows": $NR, "seqnn": $I }, ...] }
+	 */
+	enum {
+		pol_tables,
+	};
+	struct resmon_jrpc_policy policy[] = {
+		[pol_tables] = { .key = "tables", .type = json_type_array,
+				 .required = true },
+	};
+	struct json_object *values[ARRAY_SIZE(policy)] = {};
+	bool seen[ARRAY_SIZE(policy)] = {};
+	int err;
+
+	err = resmon_jrpc_dissect(obj, policy, seen, values,
+				  ARRAY_SIZE(policy), error);
+	if (err != 0)
+		return err;
+
+	return resmon_jrpc_dissect_get_tables_tables(values[pol_tables],
+						     tables, num_tables,
+						     error);
 }
 
 int resmon_jrpc_send(struct resmon_sock *sock, struct json_object *obj)

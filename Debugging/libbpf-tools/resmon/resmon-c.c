@@ -530,3 +530,102 @@ int resmon_c_stats(int argc, char **argv)
 
 	return resmon_c_stats_jrpc();
 }
+
+static int resmon_c_get_tables_jrpc(void)
+{
+	struct resmon_jrpc_table *tables;
+	struct json_object *response;
+	struct json_object *request;
+	struct json_object *result;
+	const int id = 1;
+	size_t num_tables;
+	char *error;
+	int err = 0;
+
+	request = resmon_jrpc_new_request(id, "get_tables");
+	if (request == NULL)
+		return -1;
+
+	response = resmon_c_send_request(request);
+	if (response == NULL) {
+		err = -1;
+		goto put_request;
+	}
+
+	if (!resmon_c_response_extract_result(response, id, json_type_object,
+					      &result)) {
+		err = -1;
+		goto put_response;
+	}
+
+	if (resmon_c_result_show_json(result)) {
+		err = 0;
+		goto put_result;
+	}
+
+	err = resmon_jrpc_dissect_get_tables(result, &tables, &num_tables,
+					     &error);
+	if (err != 0) {
+		fprintf(stderr, "Invalid tables object: %s\n", error);
+		free(error);
+		goto put_result;
+	}
+
+	if (env.verbosity > 0 && num_tables == 0)
+		fprintf(stderr, "no supported tables\n");
+	for (size_t i = 0; i < num_tables; i++) {
+		if (env.verbosity)
+			fprintf(stdout, "%s seqnn %d nrows %d\n",
+				tables[i].name, tables[i].seqnn,
+				tables[i].nrows);
+		else
+			fprintf(stdout, "%s\n", tables[i].name);
+	}
+	free(tables);
+
+put_result:
+	json_object_put(result);
+put_response:
+	json_object_put(response);
+put_request:
+	json_object_put(request);
+	return err;
+}
+
+static void resmon_c_dump_help(void)
+{
+	fprintf(stderr,
+		"Usage: resmon dump list tables\n");
+}
+
+int resmon_c_dump(int argc, char **argv)
+{
+	bool list_tables = false;
+
+	while (argc > 0) {
+		if (strcmp(*argv, "list") == 0) {
+			NEXT_ARG();
+			if (strcmp(*argv, "tables") != 0)
+				goto incomplete_command;
+			if (list_tables)
+				goto incomplete_command;
+			list_tables = true;
+			NEXT_ARG_FWD();
+		} else if (strcmp(*argv, "help") == 0) {
+			resmon_c_dump_help();
+			return 0;
+		} else {
+			fprintf(stderr, "What is \"%s\"?\n", *argv);
+			return -1;
+		}
+		continue;
+
+incomplete_command:
+		fprintf(stderr, "Command line is not complete. Try option \"help\"\n");
+		return -1;
+	}
+
+	if (list_tables)
+		return resmon_c_get_tables_jrpc();
+	return 0;
+}

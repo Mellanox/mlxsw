@@ -44,6 +44,9 @@ static int resmon_cmd(int argc, char **argv)
 	} else if (strcmp(*argv, "stats") == 0) {
 		NEXT_ARG_FWD();
 		return resmon_c_stats(argc, argv);
+	} else if (strcmp(*argv, "dump") == 0) {
+		NEXT_ARG_FWD();
+		return resmon_c_dump(argc, argv);
 	}
 
 	fprintf(stderr, "Unknown command \"%s\"\n", *argv);

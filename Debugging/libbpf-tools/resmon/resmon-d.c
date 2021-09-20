@@ -293,6 +293,111 @@ put_obj:
 	resmon_d_respond_memerr(peer, id);
 }
 
+struct resmon_d_table_info {
+	const char *const name;
+	unsigned int (*nrows)(const struct resmon_stat *stat);
+	unsigned int (*seqnn)(const struct resmon_stat *stat);
+};
+
+static int
+resmon_d_get_tables_attach_table(const struct resmon_stat *stat,
+				 struct json_object *array,
+				 const struct resmon_d_table_info *tinfo)
+{
+	struct json_object *table_obj;
+	unsigned int seqnn;
+	unsigned int nrows;
+
+	table_obj = json_object_new_object();
+	if (table_obj == NULL)
+		return -1;
+
+	seqnn = tinfo->seqnn(stat);
+	nrows = tinfo->nrows(stat);
+
+	if (resmon_jrpc_object_add_str(table_obj, "name", tinfo->name) != 0 ||
+	    resmon_jrpc_object_add_int(table_obj, "seqnn", seqnn) != 0 ||
+	    resmon_jrpc_object_add_int(table_obj, "nrows", nrows) != 0 ||
+	    json_object_array_add(array, table_obj) != 0)
+		goto put_table_obj;
+
+	return 0;
+
+put_table_obj:
+	json_object_put(table_obj);
+	return -1;
+}
+
+static struct resmon_d_table_info resmon_d_tables[] = {
+};
+
+static void resmon_d_handle_get_tables(const struct resmon_stat *stat,
+				       struct resmon_sock *peer,
+				       struct json_object *params_obj,
+				       struct json_object *id)
+{
+	struct json_object *result_obj;
+	struct json_object *array;
+	struct json_object *obj;
+	char *error;
+	int rc;
+
+	/* The response is as follows:
+	 *
+	 * {
+	 *     "id": ...,
+	 *     "result": {
+	 *         "tables": [ {"name": "$NAME", "nrows": $NR, "seqnn": $I }, ...]
+	 *     }
+	 * }
+	 */
+
+	rc = resmon_jrpc_dissect_params_empty(params_obj, &error);
+	if (rc != 0) {
+		resmon_d_respond_invalid_params(peer, id, error);
+		free(error);
+		return;
+	}
+
+	obj = resmon_jrpc_new_object(id);
+	if (obj == NULL)
+		return;
+
+	result_obj = json_object_new_object();
+	if (result_obj == NULL)
+		goto put_obj;
+
+	array = json_object_new_array();
+	if (array == NULL)
+		goto put_result_obj;
+
+	for (size_t i = 0; i < ARRAY_SIZE(resmon_d_tables); i++) {
+		struct resmon_d_table_info *tinfo = &resmon_d_tables[i];
+
+		if (resmon_d_get_tables_attach_table(stat, array, tinfo) != 0)
+			goto put_array;
+	}
+
+	rc = json_object_object_add(result_obj, "tables", array);
+	if (rc != 0)
+		goto put_array;
+
+	if (json_object_object_add(obj, "result", result_obj))
+		goto put_result_obj;
+
+	resmon_jrpc_send(peer, obj);
+	json_object_put(obj);
+	return;
+
+put_array:
+	json_object_put(array);
+put_result_obj:
+	json_object_put(result_obj);
+put_obj:
+	json_object_put(obj);
+	resmon_d_respond_memerr(peer, id);
+}
+
 static void resmon_d_handle_method(struct resmon_back *back,
 				   struct resmon_stat *stat,
 				   struct resmon_reg *rreg,
@@ -311,6 +416,9 @@ static void resmon_d_handle_method(struct resmon_back *back,
 	} else if (strcmp(method, "stats") == 0) {
 		resmon_d_handle_stats(back, stat, rsrc_en, peer,
 				      params_obj, id);
+		return;
+	} else if (strcmp(method, "get_tables") == 0) {
+		resmon_d_handle_get_tables(stat, peer, params_obj, id);
 		return;
 	} else if (resmon_back_handle_method(back, stat, rreg, method,
 					     peer, params_obj, id)) {

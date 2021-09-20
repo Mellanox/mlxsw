@@ -119,6 +119,15 @@ int resmon_jrpc_dissect_stats(struct json_object *obj,
 			      size_t *num_gauges,
 			      char **error);
 
+struct resmon_jrpc_table {
+	const char *name;
+	uint32_t nrows;
+	uint32_t seqnn;
+};
+int resmon_jrpc_dissect_get_tables(struct json_object *obj,
+				   struct resmon_jrpc_table **tables,
+				   size_t *num_tables, char **error);
+
 int resmon_jrpc_send(struct resmon_sock *sock, struct json_object *obj);
 
 /* resmon-c.c */
@@ -127,6 +136,7 @@ int resmon_c_ping(int argc, char **argv);
 int resmon_c_stop(int argc, char **argv);
 int resmon_c_emad(int argc, char **argv);
 int resmon_c_stats(int argc, char **argv);
+int resmon_c_dump(int argc, char **argv);
 
 /* resmon-stat.c */
 
