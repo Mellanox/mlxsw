@@ -18,7 +18,7 @@ static bool resmon_c_validate_id(struct json_object *id_obj, int expect_id)
 	return id == expect_id;
 }
 
-static void resmon_c_handle_response_error(struct json_object *error_obj)
+static void resmon_c_response_handle_error(struct json_object *error_obj)
 {
 	struct json_object *data;
 	const char *message;
@@ -41,9 +41,10 @@ static void resmon_c_handle_response_error(struct json_object *error_obj)
 		fprintf(stderr, "Error %" PRId64 ": %s\n", code, message);
 }
 
-static bool resmon_c_handle_response(struct json_object *j, int expect_id,
-				     enum json_type result_type,
-				     struct json_object **ret_result)
+static bool resmon_c_response_extract_result(struct json_object *j,
+					     int expect_id,
+					     enum json_type result_type,
+					     struct json_object **ret_result)
 {
 	struct json_object *result;
 	struct json_object *id;
@@ -65,7 +66,7 @@ static bool resmon_c_handle_response(struct json_object *j, int expect_id,
 	}
 
 	if (is_error) {
-		resmon_c_handle_response_error(result);
+		resmon_c_response_handle_error(result);
 		return false;
 	}
 
@@ -185,7 +186,8 @@ static int resmon_c_ping_jrpc(void)
 		goto put_request;
 	}
 
-	if (!resmon_c_handle_response(response, id, json_type_int, &result)) {
+	if (!resmon_c_response_extract_result(response, id, json_type_int,
+					      &result)) {
 		err = -1;
 		goto put_response;
 	}
@@ -253,7 +255,8 @@ static int resmon_c_stop_jrpc(void)
 		goto put_request;
 	}
 
-	if (!resmon_c_handle_response(response, id, json_type_null, &result)) {
+	if (!resmon_c_response_extract_result(response, id, json_type_null,
+					      &result)) {
 		err = -1;
 		goto put_response;
 	}
@@ -339,7 +342,8 @@ static int resmon_c_emad_jrpc(const char *payload, size_t payload_len)
 		goto put_request;
 	}
 
-	if (!resmon_c_handle_response(response, id, json_type_null, &result)) {
+	if (!resmon_c_response_extract_result(response, id, json_type_null,
+					      &result)) {
 		err = -1;
 		goto put_response;
 	}
@@ -474,8 +478,8 @@ static int resmon_c_stats_jrpc(void)
 		goto put_request;
 	}
 
-	if (!resmon_c_handle_response(response, id, json_type_object,
-				      &result)) {
+	if (!resmon_c_response_extract_result(response, id, json_type_object,
+					      &result)) {
 		err = -1;
 		goto put_response;
 	}
