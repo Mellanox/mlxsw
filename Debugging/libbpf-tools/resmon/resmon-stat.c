@@ -6,12 +6,39 @@
 
 #include "resmon.h"
 
+struct resmon_table {
+	struct lh_table *lh;
+};
+
 static void resmon_stat_entry_free(struct lh_entry *e)
 {
 	if (!e->k_is_constant)
 		free(lh_entry_k(e));
 	free(lh_entry_v(e));
 }
+
+static int resmon_table_init(struct resmon_table *tab,
+			     lh_hash_fn *hash_fn, lh_equal_fn *equal_fn)
+{
+	tab->lh = lh_table_new(1, resmon_stat_entry_free, hash_fn, equal_fn);
+	if (tab->lh == NULL)
+		return -1;
+
+	return 0;
+}
+
+static void resmon_table_fini(struct resmon_table *tab)
+{
+	lh_table_free(tab->lh);
+}
+
+#define RESMON_TABLE_INIT(STAT, NAME)				\
+	resmon_table_init(&(STAT)->NAME,			\
+			  resmon_stat_ ## NAME ## _hash,	\
+			  resmon_stat_ ## NAME ## _eq)
+
+#define RESMON_TABLE_FINI(STAT, NAME)				\
+	resmon_table_fini(&(STAT)->NAME)
 
 /* Fowler-Noll-Vo hash, variant FNV-1 */
 static uint64_t resmon_stat_fnv_1(const void *ptr, size_t len)
@@ -212,13 +239,13 @@ RESMON_STAT_KEY_EQ_FN(resmon_stat_svfa_eq, struct resmon_stat_svfa_key);
 
 struct resmon_stat {
 	struct resmon_stat_gauges gauges;
-	struct lh_table *ralue;
-	struct lh_table *ptar;
-	struct lh_table *ptce3;
-	struct lh_table *kvdl;
-	struct lh_table *rauht;
-	struct lh_table *sfd; /* resmon_stat_sfd_key -> resmon_stat_sfd_val */
-	struct lh_table *svfa;
+	struct resmon_table ralue;
+	struct resmon_table ptar;
+	struct resmon_table ptce3;
+	struct resmon_table kvdl;
+	struct resmon_table rauht;
+	struct resmon_table sfd; /* resmon_stat_sfd_key -> resmon_stat_sfd_val */
+	struct resmon_table svfa;
 };
 
 static struct resmon_stat_kvd_alloc *
@@ -236,84 +263,55 @@ resmon_stat_kvd_alloc_copy(struct resmon_stat_kvd_alloc kvd_alloc)
 
 struct resmon_stat *resmon_stat_create(void)
 {
-	struct lh_table *ralue_tab;
-	struct lh_table *ptce3_tab;
-	struct lh_table *ptar_tab;
-	struct lh_table *kvdl_tab;
-	struct lh_table *rauht_tab;
-	struct lh_table *svfa_tab;
 	struct resmon_stat *stat;
-	struct lh_table *sfd_tab;
+	int err;
 
 	stat = malloc(sizeof(*stat));
 	if (stat == NULL)
 		return NULL;
 
-	ralue_tab = lh_table_new(1, resmon_stat_entry_free,
-				 resmon_stat_ralue_hash,
-				 resmon_stat_ralue_eq);
-	if (ralue_tab == NULL)
+	err = RESMON_TABLE_INIT(stat, ralue);
+	if (err != 0)
 		goto free_stat;
 
-	ptar_tab = lh_table_new(1, resmon_stat_entry_free,
-				resmon_stat_ptar_hash,
-				resmon_stat_ptar_eq);
-	if (ptar_tab == NULL)
+	err = RESMON_TABLE_INIT(stat, ptar);
+	if (err != 0)
 		goto free_ralue_tab;
 
-	ptce3_tab = lh_table_new(1, resmon_stat_entry_free,
-				 resmon_stat_ptce3_hash,
-				 resmon_stat_ptce3_eq);
-	if (ptce3_tab == NULL)
+	err = RESMON_TABLE_INIT(stat, ptce3);
+	if (err != 0)
 		goto free_ptar_tab;
 
-	kvdl_tab = lh_table_new(1, resmon_stat_entry_free,
-				resmon_stat_kvdl_hash,
-				resmon_stat_kvdl_eq);
-	if (kvdl_tab == NULL)
+	err = RESMON_TABLE_INIT(stat, kvdl);
+	if (err != 0)
 		goto free_ptce3_tab;
 
-	rauht_tab = lh_table_new(1, resmon_stat_entry_free,
-				 resmon_stat_rauht_hash,
-				 resmon_stat_rauht_eq);
-	if (rauht_tab == NULL)
+	err = RESMON_TABLE_INIT(stat, rauht);
+	if (err != 0)
 		goto free_kvdl_tab;
 
-	sfd_tab = lh_table_new(1, resmon_stat_entry_free,
-			       resmon_stat_sfd_hash,
-			       resmon_stat_sfd_eq);
-	if (sfd_tab == NULL)
+	err = RESMON_TABLE_INIT(stat, sfd);
+	if (err != 0)
 		goto free_rauht_tab;
 
-	svfa_tab = lh_table_new(1, resmon_stat_entry_free,
-				resmon_stat_svfa_hash,
-				resmon_stat_svfa_eq);
-	if (svfa_tab == NULL)
+	err = RESMON_TABLE_INIT(stat, svfa);
+	if (err != 0)
 		goto free_sfd_tab;
 
-	*stat = (struct resmon_stat){
-		.ralue = ralue_tab,
-		.ptar = ptar_tab,
-		.ptce3 = ptce3_tab,
-		.kvdl = kvdl_tab,
-		.rauht = rauht_tab,
-		.sfd = sfd_tab,
-		.svfa = svfa_tab,
-	};
 	return stat;
 
 free_sfd_tab:
-	lh_table_free(sfd_tab);
+	RESMON_TABLE_FINI(stat, sfd);
 free_rauht_tab:
-	lh_table_free(rauht_tab);
+	RESMON_TABLE_FINI(stat, rauht);
 free_kvdl_tab:
-	lh_table_free(kvdl_tab);
+	RESMON_TABLE_FINI(stat, kvdl);
 free_ptce3_tab:
-	lh_table_free(ptce3_tab);
+	RESMON_TABLE_FINI(stat, ptce3);
 free_ptar_tab:
-	lh_table_free(ptar_tab);
+	RESMON_TABLE_FINI(stat, ptar);
 free_ralue_tab:
-	lh_table_free(ralue_tab);
+	RESMON_TABLE_FINI(stat, ralue);
 free_stat:
 	free(stat);
 	return NULL;
@@ -321,13 +319,13 @@ free_stat:
 
 void resmon_stat_destroy(struct resmon_stat *stat)
 {
-	lh_table_free(stat->svfa);
-	lh_table_free(stat->sfd);
-	lh_table_free(stat->rauht);
-	lh_table_free(stat->kvdl);
-	lh_table_free(stat->ptce3);
-	lh_table_free(stat->ptar);
-	lh_table_free(stat->ralue);
+	RESMON_TABLE_FINI(stat, svfa);
+	RESMON_TABLE_FINI(stat, sfd);
+	RESMON_TABLE_FINI(stat, rauht);
+	RESMON_TABLE_FINI(stat, kvdl);
+	RESMON_TABLE_FINI(stat, ptce3);
+	RESMON_TABLE_FINI(stat, ptar);
+	RESMON_TABLE_FINI(stat, ralue);
 	free(stat);
 }
 
@@ -353,16 +351,16 @@ static void resmon_stat_gauge_dec(struct resmon_stat *stat,
 	stat->gauges.values[kvd_alloc.resource] -= kvd_alloc.slots;
 }
 
-static int resmon_stat_lh_get(struct lh_table *tab,
-			      const struct resmon_stat_key *orig_key,
-			      struct resmon_stat_kvd_alloc *ret_kvd_alloc)
+static int resmon_table_get(struct resmon_table *tab,
+			    const struct resmon_stat_key *orig_key,
+			    struct resmon_stat_kvd_alloc *ret_kvd_alloc)
 {
 	const struct resmon_stat_kvd_alloc *kvd_alloc;
 	struct lh_entry *e;
 	long hash;
 
-	hash = tab->hash_fn(orig_key);
-	e = lh_table_lookup_entry_w_hash(tab, orig_key, hash);
+	hash = tab->lh->hash_fn(orig_key);
+	e = lh_table_lookup_entry_w_hash(tab->lh, orig_key, hash);
 	if (e == NULL)
 		return -1;
 
@@ -372,11 +370,11 @@ static int resmon_stat_lh_get(struct lh_table *tab,
 }
 
 static int
-resmon_stat_lh_update_nostats(struct resmon_stat *stat,
-			      struct lh_table *tab,
-			      const struct resmon_stat_key *orig_key,
-			      size_t orig_key_size,
-			      struct resmon_stat_kvd_alloc orig_kvd_alloc)
+resmon_table_update_nostats(struct resmon_stat *stat,
+			    struct resmon_table *tab,
+			    const struct resmon_stat_key *orig_key,
+			    size_t orig_key_size,
+			    struct resmon_stat_kvd_alloc orig_kvd_alloc)
 {
 	struct resmon_stat_kvd_alloc *kvd_alloc;
 	struct resmon_stat_key *key;
@@ -384,8 +382,8 @@ resmon_stat_lh_update_nostats(struct resmon_stat *stat,
 	long hash;
 	int rc;
 
-	hash = tab->hash_fn(orig_key);
-	e = lh_table_lookup_entry_w_hash(tab, orig_key, hash);
+	hash = tab->lh->hash_fn(orig_key);
+	e = lh_table_lookup_entry_w_hash(tab->lh, orig_key, hash);
 	if (e != NULL)
 		return 1;
 
@@ -397,7 +395,7 @@ resmon_stat_lh_update_nostats(struct resmon_stat *stat,
 	if (kvd_alloc == NULL)
 		goto free_key;
 
-	rc = lh_table_insert_w_hash(tab, key, kvd_alloc, hash, 0);
+	rc = lh_table_insert_w_hash(tab->lh, key, kvd_alloc, hash, 0);
 	if (rc)
 		goto free_kvd_alloc;
 
@@ -410,16 +408,16 @@ free_key:
 	return -1;
 }
 
-static int resmon_stat_lh_update(struct resmon_stat *stat,
-				 struct lh_table *tab,
-				 const struct resmon_stat_key *orig_key,
-				 size_t orig_key_size,
-				 struct resmon_stat_kvd_alloc orig_kvd_alloc)
+static int resmon_table_update(struct resmon_stat *stat,
+			       struct resmon_table *tab,
+			       const struct resmon_stat_key *orig_key,
+			       size_t orig_key_size,
+			       struct resmon_stat_kvd_alloc orig_kvd_alloc)
 {
 	int err;
 
-	err = resmon_stat_lh_update_nostats(stat, tab, orig_key, orig_key_size,
-					    orig_kvd_alloc);
+	err = resmon_table_update_nostats(stat, tab, orig_key, orig_key_size,
+					  orig_kvd_alloc);
 	if (err == 1)
 		return 0;
 	if (err != 0)
@@ -429,36 +427,36 @@ static int resmon_stat_lh_update(struct resmon_stat *stat,
 	return 0;
 }
 
-static int resmon_stat_lh_delete_nostats(struct resmon_stat *stat,
-					 struct lh_table *tab,
-					 const struct resmon_stat_key *orig_key,
-					 struct resmon_stat_kvd_alloc *kvd_alloc)
+static int resmon_table_delete_nostats(struct resmon_stat *stat,
+				       struct resmon_table *tab,
+				       const struct resmon_stat_key *orig_key,
+				       struct resmon_stat_kvd_alloc *kvd_alloc)
 {
 	const struct resmon_stat_kvd_alloc *vp;
 	struct lh_entry *e;
 	long hash;
 	int rc;
 
-	hash = tab->hash_fn(orig_key);
-	e = lh_table_lookup_entry_w_hash(tab, orig_key, hash);
+	hash = tab->lh->hash_fn(orig_key);
+	e = lh_table_lookup_entry_w_hash(tab->lh, orig_key, hash);
 	if (e == NULL)
 		return -1;
 
 	vp = e->v;
 	*kvd_alloc = *vp;
-	rc = lh_table_delete_entry(tab, e);
+	rc = lh_table_delete_entry(tab->lh, e);
 	assert(rc == 0);
 	return 0;
 }
 
-static int resmon_stat_lh_delete(struct resmon_stat *stat,
-				 struct lh_table *tab,
-				 const struct resmon_stat_key *orig_key)
+static int resmon_table_delete(struct resmon_stat *stat,
+			       struct resmon_table *tab,
+			       const struct resmon_stat_key *orig_key)
 {
 	struct resmon_stat_kvd_alloc kvd_alloc;
 	int err;
 
-	err = resmon_stat_lh_delete_nostats(stat, tab, orig_key, &kvd_alloc);
+	err = resmon_table_delete_nostats(stat, tab, orig_key, &kvd_alloc);
 	if (err != 0)
 		return err;
 
@@ -477,8 +475,8 @@ int resmon_stat_ralue_update(struct resmon_stat *stat,
 		resmon_stat_ralue_key(protocol, prefix_len, virtual_router,
 				      dip);
 
-	return resmon_stat_lh_update(stat, stat->ralue,
-				     &key.base, sizeof(key), kvd_alloc);
+	return resmon_table_update(stat, &stat->ralue,
+				   &key.base, sizeof(key), kvd_alloc);
 }
 
 int resmon_stat_ralue_delete(struct resmon_stat *stat,
@@ -491,7 +489,7 @@ int resmon_stat_ralue_delete(struct resmon_stat *stat,
 		resmon_stat_ralue_key(protocol, prefix_len, virtual_router,
 				      dip);
 
-	return resmon_stat_lh_delete(stat, stat->ralue, &key.base);
+	return resmon_table_delete(stat, &stat->ralue, &key.base);
 }
 
 int resmon_stat_ptar_alloc(struct resmon_stat *stat,
@@ -501,8 +499,8 @@ int resmon_stat_ptar_alloc(struct resmon_stat *stat,
 	struct resmon_stat_ptar_key key =
 		resmon_stat_ptar_key(tcam_region_info);
 
-	return resmon_stat_lh_update_nostats(stat, stat->ptar,
-					     &key.base, sizeof(key), kvd_alloc);
+	return resmon_table_update_nostats(stat, &stat->ptar,
+					   &key.base, sizeof(key), kvd_alloc);
 }
 
 int resmon_stat_ptar_free(struct resmon_stat *stat,
@@ -512,8 +510,8 @@ int resmon_stat_ptar_free(struct resmon_stat *stat,
 		resmon_stat_ptar_key(tcam_region_info);
 	struct resmon_stat_kvd_alloc kvd_alloc;
 
-	return resmon_stat_lh_delete_nostats(stat, stat->ptar, &key.base,
-					     &kvd_alloc);
+	return resmon_table_delete_nostats(stat, &stat->ptar, &key.base,
+					   &kvd_alloc);
 }
 
 int resmon_stat_ptar_get(struct resmon_stat *stat,
@@ -523,7 +521,7 @@ int resmon_stat_ptar_get(struct resmon_stat *stat,
 	struct resmon_stat_ptar_key key =
 		resmon_stat_ptar_key(tcam_region_info);
 
-	return resmon_stat_lh_get(stat->ptar, &key.base, ret_kvd_alloc);
+	return resmon_table_get(&stat->ptar, &key.base, ret_kvd_alloc);
 }
 
 int
@@ -540,8 +538,8 @@ resmon_stat_ptce3_alloc(struct resmon_stat *stat,
 		resmon_stat_ptce3_key(tcam_region_info, key_blocks, delta_mask,
 				      delta_value, delta_start, erp_id);
 
-	return resmon_stat_lh_update(stat, stat->ptce3,
-				     &key.base, sizeof(key), kvd_alloc);
+	return resmon_table_update(stat, &stat->ptce3,
+				   &key.base, sizeof(key), kvd_alloc);
 }
 
 int
@@ -557,7 +555,7 @@ resmon_stat_ptce3_free(struct resmon_stat *stat,
 		resmon_stat_ptce3_key(tcam_region_info, key_blocks, delta_mask,
 				      delta_value, delta_start, erp_id);
 
-	return resmon_stat_lh_delete(stat, stat->ptce3, &key.base);
+	return resmon_table_delete(stat, &stat->ptce3, &key.base);
 }
 
 int resmon_stat_rauht_update(struct resmon_stat *stat,
@@ -569,8 +567,8 @@ int resmon_stat_rauht_update(struct resmon_stat *stat,
 	struct resmon_stat_rauht_key key =
 		resmon_stat_rauht_key(protocol, rif, dip);
 
-	return resmon_stat_lh_update(stat, stat->rauht,
-				     &key.base, sizeof(key), kvd_alloc);
+	return resmon_table_update(stat, &stat->rauht,
+				   &key.base, sizeof(key), kvd_alloc);
 }
 
 int resmon_stat_rauht_delete(struct resmon_stat *stat,
@@ -581,7 +579,7 @@ int resmon_stat_rauht_delete(struct resmon_stat *stat,
 	struct resmon_stat_rauht_key key =
 		resmon_stat_rauht_key(protocol, rif, dip);
 
-	return resmon_stat_lh_delete(stat, stat->rauht, &key.base);
+	return resmon_table_delete(stat, &stat->rauht, &key.base);
 }
 
 static int resmon_stat_kvdl_alloc_1(struct resmon_stat *stat,
@@ -594,8 +592,8 @@ static int resmon_stat_kvdl_alloc_1(struct resmon_stat *stat,
 		.resource = resource,
 	};
 
-	return resmon_stat_lh_update(stat, stat->kvdl,
-				     &key.base, sizeof(key), kvd_alloc);
+	return resmon_table_update(stat, &stat->kvdl,
+				   &key.base, sizeof(key), kvd_alloc);
 }
 
 static int resmon_stat_kvdl_free_1(struct resmon_stat *stat,
@@ -604,7 +602,7 @@ static int resmon_stat_kvdl_free_1(struct resmon_stat *stat,
 {
 	struct resmon_stat_kvdl_key key = resmon_stat_kvdl_key(index, resource);
 
-	return resmon_stat_lh_delete(stat, stat->kvdl, &key.base);
+	return resmon_table_delete(stat, &stat->kvdl, &key.base);
 }
 
 int resmon_stat_kvdl_alloc(struct resmon_stat *stat,
@@ -670,7 +668,7 @@ resmon_stat_lh_sfd_insert(struct resmon_stat *stat,
 	val->param = param;
 	val->kvd_alloc = kvd_alloc;
 
-	rc = lh_table_insert_w_hash(stat->sfd, key, val, hash, 0);
+	rc = lh_table_insert_w_hash(stat->sfd.lh, key, val, hash, 0);
 	if (rc)
 		goto free_val;
 
@@ -695,7 +693,7 @@ static int resmon_stat_sfd_delete_entry(struct resmon_stat *stat,
 	vp = e->v;
 	kvd_alloc = vp->kvd_alloc;
 
-	rc = lh_table_delete_entry(stat->sfd, e);
+	rc = lh_table_delete_entry(stat->sfd.lh, e);
 	assert(rc == 0);
 	resmon_stat_gauge_dec(stat, kvd_alloc);
 	return 0;
@@ -710,8 +708,8 @@ resmon_stat_sfd_delete(struct resmon_stat *stat, struct resmon_stat_mac mac,
 	long hash;
 
 	key = resmon_stat_sfd_key(mac, fid);
-	hash = stat->sfd->hash_fn(&key.base);
-	e = lh_table_lookup_entry_w_hash(stat->sfd, &key.base, hash);
+	hash = stat->sfd.lh->hash_fn(&key.base);
+	e = lh_table_lookup_entry_w_hash(stat->sfd.lh, &key.base, hash);
 	if (e == NULL)
 		return -1;
 
@@ -729,8 +727,8 @@ resmon_stat_sfd_update(struct resmon_stat *stat, struct resmon_stat_mac mac,
 	long hash;
 
 	key = resmon_stat_sfd_key(mac, fid);
-	hash = stat->sfd->hash_fn(&key.base);
-	e = lh_table_lookup_entry_w_hash(stat->sfd, &key.base, hash);
+	hash = stat->sfd.lh->hash_fn(&key.base);
+	e = lh_table_lookup_entry_w_hash(stat->sfd.lh, &key.base, hash);
 	if (e != NULL) {
 		vp = lh_entry_v(e);
 		vp->param_type = param_type;
@@ -775,7 +773,7 @@ int resmon_stat_sfdf_flush(struct resmon_stat *stat, uint16_t fid,
 	struct lh_entry *e, *tmp;
 	int err;
 
-	lh_foreach_safe(stat->sfd, e, tmp) {
+	lh_foreach_safe(stat->sfd.lh, e, tmp) {
 		key = e->k;
 		val = e->v;
 
@@ -802,8 +800,8 @@ int resmon_stat_svfa_update(struct resmon_stat *stat,
 	struct resmon_stat_svfa_key key =
 		resmon_stat_svfa_key(mapping_table, local_port, vid_vni);
 
-	return resmon_stat_lh_update(stat, stat->svfa,
-				     &key.base, sizeof(key), kvd_alloc);
+	return resmon_table_update(stat, &stat->svfa,
+				   &key.base, sizeof(key), kvd_alloc);
 }
 
 int resmon_stat_svfa_delete(struct resmon_stat *stat,
@@ -813,5 +811,5 @@ int resmon_stat_svfa_delete(struct resmon_stat *stat,
 	struct resmon_stat_svfa_key key =
 		resmon_stat_svfa_key(mapping_table, local_port, vid_vni);
 
-	return resmon_stat_lh_delete(stat, stat->svfa, &key.base);
+	return resmon_table_delete(stat, &stat->svfa, &key.base);
 }
