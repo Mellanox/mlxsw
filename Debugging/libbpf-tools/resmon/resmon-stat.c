@@ -314,6 +314,7 @@ resmon_stat_rauht_key(enum mlxsw_reg_ralxx_protocol protocol,
 RESMON_STAT_KEY_HASH_FN(resmon_stat_rauht_hash, struct resmon_stat_rauht_key);
 RESMON_STAT_KEY_EQ_FN(resmon_stat_rauht_eq, struct resmon_stat_rauht_key);
 RESMON_STAT_SEQNN_FN(rauht);
+RESMON_STAT_NROWS_FN(rauht);
 
 struct resmon_stat_sfd_key {
 	struct resmon_stat_key base;
@@ -765,6 +766,27 @@ int resmon_stat_rauht_delete(struct resmon_stat *stat,
 		resmon_stat_rauht_key(protocol, rif, dip);
 
 	return resmon_table_delete(stat, &stat->rauht, &key.base);
+}
+
+int resmon_stat_rauht_next_row(struct resmon_stat *stat,
+			       enum mlxsw_reg_ralxx_protocol *protocol,
+			       uint16_t *rif,
+			       struct resmon_stat_dip *dip,
+			       struct resmon_stat_kvd_alloc *kvd_alloc)
+{
+	struct lh_entry *e = resmon_table_next(&stat->rauht);
+
+	if (e == NULL)
+		return -1;
+
+	const struct resmon_stat_kvd_alloc *kvda = lh_entry_v(e);
+	const struct resmon_stat_rauht_key *key = lh_entry_k(e);
+
+	*protocol = key->protocol;
+	*rif = key->rif;
+	*dip = key->dip;
+	*kvd_alloc = *kvda;
+	return 0;
 }
 
 static int resmon_stat_kvdl_alloc_1(struct resmon_stat *stat,

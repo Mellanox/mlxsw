@@ -311,6 +311,12 @@ int resmon_stat_rauht_delete(struct resmon_stat *stat,
 			     uint16_t rif,
 			     struct resmon_stat_dip dip);
 unsigned int resmon_stat_rauht_seqnn(const struct resmon_stat *stat);
+unsigned int resmon_stat_rauht_nrows(const struct resmon_stat *stat);
+int resmon_stat_rauht_next_row(struct resmon_stat *stat,
+			       enum mlxsw_reg_ralxx_protocol *protocol,
+			       uint16_t *rif,
+			       struct resmon_stat_dip *dip,
+			       struct resmon_stat_kvd_alloc *kvd_alloc);
 
 int
 resmon_stat_sfd_update(struct resmon_stat *stat, struct resmon_stat_mac mac,

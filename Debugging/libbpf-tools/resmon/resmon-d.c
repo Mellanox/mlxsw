@@ -339,6 +339,8 @@ static struct json_object *resmon_d_dump_ptce3_next(struct resmon_stat *stat,
 						    char **error);
 static struct json_object *resmon_d_dump_kvdl_next(struct resmon_stat *stat,
 						   char **error);
+static struct json_object *resmon_d_dump_rauht_next(struct resmon_stat *stat,
+						    char **error);
 
 static struct resmon_d_table_info resmon_d_tables[] = {
 	{
@@ -364,6 +366,12 @@ static struct resmon_d_table_info resmon_d_tables[] = {
 		.seqnn = resmon_stat_kvdl_seqnn,
 		.nrows = resmon_stat_kvdl_nrows,
 		.dump_next = resmon_d_dump_kvdl_next,
+	},
+	{
+		.name = "rauht",
+		.seqnn = resmon_stat_rauht_seqnn,
+		.nrows = resmon_stat_rauht_nrows,
+		.dump_next = resmon_d_dump_rauht_next,
 	},
 };
 
@@ -541,7 +549,8 @@ static int resmon_d_dump_dip(struct json_object *obj, const char *key,
 	if (inet_ntop(af, &dip, buf, sizeof(buf)) == NULL)
 		return -1;
 
-	sprintf(strchr(buf, '\0'), "/%d", prefix_len);
+	if (prefix_len != (uint8_t) -1)
+		sprintf(strchr(buf, '\0'), "/%d", prefix_len);
 	return resmon_jrpc_object_add_str(obj, key, buf);
 }
 
@@ -781,6 +790,49 @@ static struct json_object *resmon_d_dump_kvdl_next(struct resmon_stat *stat,
 
 err_form_row:
 	resmon_fmterr(error, "Couldn't form kvdl row: %m");
+	json_object_put(row);
+	return NULL;
+}
+
+static struct json_object *resmon_d_dump_rauht_next(struct resmon_stat *stat,
+						    char **error)
+{
+	struct json_object *value; /* Observer pointer. */
+	struct json_object *key;   /* Observer pointer. */
+	struct json_object *row;   /* Owner of key and value. */
+	enum mlxsw_reg_ralxx_protocol protocol;
+	struct resmon_stat_kvd_alloc kvd_alloc;
+	struct resmon_stat_dip dip;
+	uint16_t rif;
+	int err;
+
+	err = resmon_d_dump_row_alloc(&key, &value, &row, error);
+	if (err != 0)
+		return NULL;
+
+	err = resmon_stat_rauht_next_row(stat, &protocol, &rif, &dip,
+					 &kvd_alloc);
+	if (err != 0) {
+		*error = NULL;
+		return NULL;
+	}
+
+	err = resmon_d_dump_dip(key, "dip", protocol, dip, (uint8_t) -1);
+	if (err != 0)
+		goto err_form_row;
+
+	err = resmon_jrpc_object_add_int(key, "rif", rif);
+	if (err != 0)
+		goto err_form_row;
+
+	err = resmon_d_dump_kvda(value, kvd_alloc);
+	if (err != 0)
+		goto err_form_row;
+
+	return row;
+
+err_form_row:
+	resmon_fmterr(error, "Couldn't form rauht row: %m");
 	json_object_put(row);
 	return NULL;
 }
