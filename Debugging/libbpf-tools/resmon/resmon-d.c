@@ -335,6 +335,8 @@ static struct json_object *resmon_d_dump_ralue_next(struct resmon_stat *stat,
 						    char **error);
 static struct json_object *resmon_d_dump_ptar_next(struct resmon_stat *stat,
 						   char **error);
+static struct json_object *resmon_d_dump_ptce3_next(struct resmon_stat *stat,
+						    char **error);
 
 static struct resmon_d_table_info resmon_d_tables[] = {
 	{
@@ -348,6 +350,12 @@ static struct resmon_d_table_info resmon_d_tables[] = {
 		.seqnn = resmon_stat_ptar_seqnn,
 		.nrows = resmon_stat_ptar_nrows,
 		.dump_next = resmon_d_dump_ptar_next,
+	},
+	{
+		.name = "ptce3",
+		.seqnn = resmon_stat_ptce3_seqnn,
+		.nrows = resmon_stat_ptce3_nrows,
+		.dump_next = resmon_d_dump_ptce3_next,
 	},
 };
 
@@ -546,6 +554,23 @@ resmon_d_dump_tcam_region_info(struct json_object *obj, const char *key,
 	return err;
 }
 
+static int
+resmon_d_dump_flex2_key_blocks(struct json_object *obj, const char *key,
+		    const struct resmon_stat_flex2_key_blocks *flex2_key_blocks)
+{
+	char *str;
+	int err;
+
+	str = resmon_d_base64_encode(flex2_key_blocks->flex2_key_blocks,
+				     sizeof(flex2_key_blocks->flex2_key_blocks));
+	if (str == NULL)
+		return -1;
+
+	err = resmon_jrpc_object_add_str(obj, key, str);
+	free(str);
+	return err;
+}
+
 static int resmon_d_dump_kvda(struct json_object *obj,
 			      struct resmon_stat_kvd_alloc kvda)
 {
@@ -641,6 +666,72 @@ static struct json_object *resmon_d_dump_ptar_next(struct resmon_stat *stat,
 
 err_form_row:
 	resmon_fmterr(error, "Couldn't form ptar row: %m");
+	json_object_put(row);
+	return NULL;
+}
+
+static struct json_object *resmon_d_dump_ptce3_next(struct resmon_stat *stat,
+						    char **error)
+{
+	struct json_object *value; /* Observer pointer. */
+	struct json_object *key;   /* Observer pointer. */
+	struct json_object *row;   /* Owner of key and value. */
+	struct resmon_stat_tcam_region_info tcam_region_info;
+	struct resmon_stat_flex2_key_blocks flex2_key_blocks;
+	struct resmon_stat_kvd_alloc kvd_alloc;
+	uint16_t delta_start;
+	uint8_t delta_value;
+	uint8_t delta_mask;
+	uint8_t erp_id;
+	int err;
+
+	err = resmon_d_dump_row_alloc(&key, &value, &row, error);
+	if (err != 0)
+		return NULL;
+
+	err = resmon_stat_ptce3_next_row(stat, &tcam_region_info,
+					 &flex2_key_blocks, &delta_mask,
+					 &delta_value, &delta_start, &erp_id,
+					 &kvd_alloc);
+	if (err != 0) {
+		*error = NULL;
+		return NULL;
+	}
+
+	err = resmon_d_dump_tcam_region_info(key, "tcam_region_info",
+					     tcam_region_info);
+	if (err != 0)
+		goto err_form_row;
+
+	err = resmon_d_dump_flex2_key_blocks(key, "flex2_key_blocks",
+					     &flex2_key_blocks);
+	if (err != 0)
+		goto err_form_row;
+
+	err = resmon_jrpc_object_add_int(key, "delta_mask", delta_mask);
+	if (err != 0)
+		goto err_form_row;
+
+	err = resmon_jrpc_object_add_int(key, "delta_value", delta_value);
+	if (err != 0)
+		goto err_form_row;
+
+	err = resmon_jrpc_object_add_int(key, "delta_start", delta_start);
+	if (err != 0)
+		goto err_form_row;
+
+	err = resmon_jrpc_object_add_int(key, "erp_id", erp_id);
+	if (err != 0)
+		goto err_form_row;
+
+	err = resmon_d_dump_kvda(value, kvd_alloc);
+	if (err != 0)
+		goto err_form_row;
+
+	return row;
+
+err_form_row:
+	resmon_fmterr(error, "Couldn't form ptce3 row: %m");
 	json_object_put(row);
 	return NULL;
 }

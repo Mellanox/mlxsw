@@ -279,6 +279,15 @@ int resmon_stat_ptce3_free(struct resmon_stat *stat,
 		       uint16_t delta_start,
 		       uint8_t erp_id);
 unsigned int resmon_stat_ptce3_seqnn(const struct resmon_stat *stat);
+unsigned int resmon_stat_ptce3_nrows(const struct resmon_stat *stat);
+int resmon_stat_ptce3_next_row(struct resmon_stat *stat,
+			struct resmon_stat_tcam_region_info *tcam_region_info,
+			struct resmon_stat_flex2_key_blocks *flex2_key_blocks,
+			uint8_t *delta_mask,
+			uint8_t *delta_value,
+			uint16_t *delta_start,
+			uint8_t *erp_id,
+			struct resmon_stat_kvd_alloc *kvd_alloc);
 
 int resmon_stat_kvdl_alloc(struct resmon_stat *stat,
 			   uint32_t index,
