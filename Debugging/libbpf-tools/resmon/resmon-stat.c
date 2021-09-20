@@ -363,6 +363,7 @@ resmon_stat_svfa_key(enum mlxsw_reg_svfa_mt mapping_table, uint16_t local_port,
 RESMON_STAT_KEY_HASH_FN(resmon_stat_svfa_hash, struct resmon_stat_svfa_key);
 RESMON_STAT_KEY_EQ_FN(resmon_stat_svfa_eq, struct resmon_stat_svfa_key);
 RESMON_STAT_SEQNN_FN(svfa);
+RESMON_STAT_NROWS_FN(svfa);
 
 static struct resmon_stat_kvd_alloc *
 resmon_stat_kvd_alloc_copy(struct resmon_stat_kvd_alloc kvd_alloc)
@@ -1087,4 +1088,25 @@ int resmon_stat_svfa_delete(struct resmon_stat *stat,
 		resmon_stat_svfa_key(mapping_table, local_port, vid_vni);
 
 	return resmon_table_delete(stat, &stat->svfa, &key.base);
+}
+
+int resmon_stat_svfa_next_row(struct resmon_stat *stat,
+			      enum mlxsw_reg_svfa_mt *mapping_table,
+			      uint16_t *local_port,
+			      uint32_t *vid_vni,
+			      struct resmon_stat_kvd_alloc *kvd_alloc)
+{
+	const struct lh_entry *e = resmon_table_next(&stat->svfa);
+
+	if (e == NULL)
+		return -1;
+
+	const struct resmon_stat_kvd_alloc *kvda = lh_entry_v(e);
+	const struct resmon_stat_svfa_key *key = lh_entry_k(e);
+
+	*mapping_table = key->mapping_table;
+	*local_port = key->local_port;
+	*vid_vni = key->vid_vni;
+	*kvd_alloc = *kvda;
+	return 0;
 }

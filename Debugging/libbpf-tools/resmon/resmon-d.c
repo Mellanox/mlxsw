@@ -343,6 +343,8 @@ static struct json_object *resmon_d_dump_rauht_next(struct resmon_stat *stat,
 						    char **error);
 static struct json_object *resmon_d_dump_sfd_next(struct resmon_stat *stat,
 						  char **error);
+static struct json_object *resmon_d_dump_svfa_next(struct resmon_stat *stat,
+						   char **error);
 
 static struct resmon_d_table_info resmon_d_tables[] = {
 	{
@@ -380,6 +382,12 @@ static struct resmon_d_table_info resmon_d_tables[] = {
 		.seqnn = resmon_stat_sfd_seqnn,
 		.nrows = resmon_stat_sfd_nrows,
 		.dump_next = resmon_d_dump_sfd_next,
+	},
+	{
+		.name = "svfa",
+		.seqnn = resmon_stat_svfa_seqnn,
+		.nrows = resmon_stat_svfa_nrows,
+		.dump_next = resmon_d_dump_svfa_next,
 	},
 };
 
@@ -926,6 +934,72 @@ static struct json_object *resmon_d_dump_sfd_next(struct resmon_stat *stat,
 
 err_form_row:
 	resmon_fmterr(error, "Couldn't form sfd row: %m");
+	json_object_put(row);
+	return NULL;
+}
+
+static const char *
+resmon_d_reg_svfa_mt_name(enum mlxsw_reg_svfa_mt mapping_table)
+{
+	switch (mapping_table) {
+	case MLXSW_REG_SVFA_MT_VID_TO_FID:
+		return "vid_to_fid";
+	case MLXSW_REG_SVFA_MT_PORT_VID_TO_FID:
+		return "port_vid_to_fid";
+	case MLXSW_REG_SVFA_MT_VNI_TO_FID:
+		return "vni_to_fid";
+	}
+
+	assert(false);
+	abort();
+}
+
+static struct json_object *resmon_d_dump_svfa_next(struct resmon_stat *stat,
+						   char **error)
+{
+	struct json_object *value; /* Observer pointer. */
+	struct json_object *key;   /* Observer pointer. */
+	struct json_object *row;   /* Owner of key and value. */
+	struct resmon_stat_kvd_alloc kvd_alloc;
+	enum mlxsw_reg_svfa_mt mapping_table;
+	const char *mapping_table_str;
+	uint16_t local_port;
+	uint32_t vid_vni;
+	int err;
+
+	err = resmon_d_dump_row_alloc(&key, &value, &row, error);
+	if (err != 0)
+		return NULL;
+
+	err = resmon_stat_svfa_next_row(stat, &mapping_table, &local_port,
+					&vid_vni, &kvd_alloc);
+	if (err != 0) {
+		*error = NULL;
+		return NULL;
+	}
+
+	mapping_table_str = resmon_d_reg_svfa_mt_name(mapping_table);
+	err = resmon_jrpc_object_add_str(key, "mapping_table",
+					 mapping_table_str);
+	if (err != 0)
+		goto err_form_row;
+
+	err = resmon_jrpc_object_add_int(key, "local_port", local_port);
+	if (err != 0)
+		goto err_form_row;
+
+	err = resmon_jrpc_object_add_int(key, "vid_vni", vid_vni);
+	if (err != 0)
+		goto err_form_row;
+
+	err = resmon_d_dump_kvda(value, kvd_alloc);
+	if (err != 0)
+		goto err_form_row;
+
+	return row;
+
+err_form_row:
+	resmon_fmterr(error, "Couldn't form svfa row: %m");
 	json_object_put(row);
 	return NULL;
 }

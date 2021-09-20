@@ -345,6 +345,12 @@ int resmon_stat_svfa_delete(struct resmon_stat *stat,
 			    enum mlxsw_reg_svfa_mt mapping_table,
 			    uint16_t local_port, uint32_t vid_vni);
 unsigned int resmon_stat_svfa_seqnn(const struct resmon_stat *stat);
+unsigned int resmon_stat_svfa_nrows(const struct resmon_stat *stat);
+int resmon_stat_svfa_next_row(struct resmon_stat *stat,
+			      enum mlxsw_reg_svfa_mt *mapping_table,
+			      uint16_t *local_port,
+			      uint32_t *vid_vni,
+			      struct resmon_stat_kvd_alloc *kvd_alloc);
 
 /* resmon-dl.c */
 
