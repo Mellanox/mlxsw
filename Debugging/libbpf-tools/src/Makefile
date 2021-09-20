@@ -4,7 +4,7 @@ include $(REL_SRCDIR)/common.mk
 
 OUTPUT := .output
 INCLUDES := -I$(OUTPUT) $(LIBBPF_INCLUDE) $(COMMON_INCLUDE)
-CFLAGS := -g -Wall
+CFLAGS := -g -Wall -Wunused
 
 APPS = emadlatency emadump trapagg
 

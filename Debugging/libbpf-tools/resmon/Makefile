@@ -5,7 +5,7 @@ include $(REL_SRCDIR)/common.mk
 
 OUTPUT := .output
 INCLUDES := $(COMMON_INCLUDE)
-CFLAGS := -g -Wall
+CFLAGS := -g -Wall -Wunused
 
 APPS := resmon resmon-exporter
 resmon-OBJECTS :=		\
