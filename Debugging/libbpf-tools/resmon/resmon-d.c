@@ -341,6 +341,8 @@ static struct json_object *resmon_d_dump_kvdl_next(struct resmon_stat *stat,
 						   char **error);
 static struct json_object *resmon_d_dump_rauht_next(struct resmon_stat *stat,
 						    char **error);
+static struct json_object *resmon_d_dump_sfd_next(struct resmon_stat *stat,
+						  char **error);
 
 static struct resmon_d_table_info resmon_d_tables[] = {
 	{
@@ -372,6 +374,12 @@ static struct resmon_d_table_info resmon_d_tables[] = {
 		.seqnn = resmon_stat_rauht_seqnn,
 		.nrows = resmon_stat_rauht_nrows,
 		.dump_next = resmon_d_dump_rauht_next,
+	},
+	{
+		.name = "sfd",
+		.seqnn = resmon_stat_sfd_seqnn,
+		.nrows = resmon_stat_sfd_nrows,
+		.dump_next = resmon_d_dump_sfd_next,
 	},
 };
 
@@ -551,6 +559,19 @@ static int resmon_d_dump_dip(struct json_object *obj, const char *key,
 
 	if (prefix_len != (uint8_t) -1)
 		sprintf(strchr(buf, '\0'), "/%d", prefix_len);
+	return resmon_jrpc_object_add_str(obj, key, buf);
+}
+
+static int resmon_d_dump_mac(struct json_object *obj, const char *key,
+			     struct resmon_stat_mac mac)
+{
+	char buf[sizeof(mac.mac) * 3]; /* Each MAC byte is "xx:", with term. 0
+					* instead of the last colon.
+					*/
+
+	sprintf(buf, "%02x:%02x:%02x:%02x:%02x:%02x",
+		mac.mac[0], mac.mac[1], mac.mac[2],
+		mac.mac[3], mac.mac[4], mac.mac[5]);
 	return resmon_jrpc_object_add_str(obj, key, buf);
 }
 
@@ -833,6 +854,78 @@ static struct json_object *resmon_d_dump_rauht_next(struct resmon_stat *stat,
 
 err_form_row:
 	resmon_fmterr(error, "Couldn't form rauht row: %m");
+	json_object_put(row);
+	return NULL;
+}
+
+static const char *
+resmon_d_sfd_param_type_name(enum resmon_stat_sfd_param_type param_type)
+{
+	switch (param_type) {
+	case RESMON_STAT_SFD_PARAM_TYPE_SYSTEM_PORT:
+		return "system_port";
+	case RESMON_STAT_SFD_PARAM_TYPE_LAG:
+		return "lag";
+	case RESMON_STAT_SFD_PARAM_TYPE_MID:
+		return "mid";
+	case RESMON_STAT_SFD_PARAM_TYPE_TUNNEL_PORT:
+		return "tunnel_port";
+	}
+
+	assert(false);
+	abort();
+}
+
+static struct json_object *resmon_d_dump_sfd_next(struct resmon_stat *stat,
+						  char **error)
+{
+	struct json_object *value; /* Observer pointer. */
+	struct json_object *key;   /* Observer pointer. */
+	struct json_object *row;   /* Owner of key and value. */
+	enum resmon_stat_sfd_param_type param_type;
+	struct resmon_stat_kvd_alloc kvd_alloc;
+	struct resmon_stat_mac mac;
+	const char *param_type_str;
+	uint16_t param;
+	uint16_t fid;
+	int err;
+
+	err = resmon_d_dump_row_alloc(&key, &value, &row, error);
+	if (err != 0)
+		return NULL;
+
+	err = resmon_stat_sfd_next_row(stat, &mac, &fid, &param_type, &param,
+				       &kvd_alloc);
+	if (err != 0) {
+		*error = NULL;
+		return NULL;
+	}
+
+	err = resmon_d_dump_mac(key, "mac", mac);
+	if (err != 0)
+		goto err_form_row;
+
+	err = resmon_jrpc_object_add_int(key, "fid", fid);
+	if (err != 0)
+		goto err_form_row;
+
+	param_type_str = resmon_d_sfd_param_type_name(param_type);
+	err = resmon_jrpc_object_add_str(value, "param_type", param_type_str);
+	if (err != 0)
+		goto err_form_row;
+
+	err = resmon_jrpc_object_add_int(value, "param", param);
+	if (err != 0)
+		goto err_form_row;
+
+	err = resmon_d_dump_kvda(value, kvd_alloc);
+	if (err != 0)
+		goto err_form_row;
+
+	return row;
+
+err_form_row:
+	resmon_fmterr(error, "Couldn't form sfd row: %m");
 	json_object_put(row);
 	return NULL;
 }

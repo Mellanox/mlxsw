@@ -340,6 +340,7 @@ struct resmon_stat_sfd_val {
 RESMON_STAT_KEY_HASH_FN(resmon_stat_sfd_hash, struct resmon_stat_sfd_key);
 RESMON_STAT_KEY_EQ_FN(resmon_stat_sfd_eq, struct resmon_stat_sfd_key);
 RESMON_STAT_SEQNN_FN(sfd);
+RESMON_STAT_NROWS_FN(sfd);
 
 struct resmon_stat_svfa_key {
 	struct resmon_stat_key base;
@@ -987,6 +988,55 @@ resmon_stat_sfd_vals_match(enum resmon_stat_sfd_param_type param_type1,
 		return false;
 
 	return true;
+}
+
+int resmon_stat_sfd_next_row(struct resmon_stat *stat,
+			     struct resmon_stat_mac *mac,
+			     uint16_t *fid,
+			     enum resmon_stat_sfd_param_type *param_type,
+			     uint16_t *param,
+			     struct resmon_stat_kvd_alloc *kvd_alloc)
+{
+	const struct lh_entry *e = resmon_table_next(&stat->sfd);
+
+	if (e == NULL)
+		return -1;
+
+	const struct resmon_stat_sfd_val *val = lh_entry_v(e);
+	const struct resmon_stat_sfd_key *key = lh_entry_k(e);
+
+	*mac = key->mac;
+	*fid = key->fid;
+	*param_type = val->param_type;
+	*param = val->param;
+	*kvd_alloc = val->kvd_alloc;
+	return 0;
+}
+
+int resmon_stat_sfd_foreach(struct resmon_stat *stat,
+			    int (*cb)(struct resmon_stat_mac mac,
+				      uint16_t fid,
+				      enum resmon_stat_sfd_param_type param_type,
+				      uint16_t param,
+				      struct resmon_stat_kvd_alloc kvd_alloc,
+				      void *data,
+				      char **error),
+			    void *data,
+			    char **error)
+{
+	struct lh_entry *e;
+
+	lh_foreach(stat->sfd.lh, e) {
+		const struct resmon_stat_sfd_val *val = lh_entry_v(e);
+		const struct resmon_stat_sfd_key *key = lh_entry_k(e);
+		int err;
+
+		err = cb(key->mac, key->fid, val->param_type, val->param,
+			 val->kvd_alloc, data, error);
+		if (err != 0)
+			return err;
+	}
+	return 0;
 }
 
 int resmon_stat_sfdf_flush(struct resmon_stat *stat, uint16_t fid,

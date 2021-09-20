@@ -325,6 +325,13 @@ resmon_stat_sfd_update(struct resmon_stat *stat, struct resmon_stat_mac mac,
 int resmon_stat_sfd_delete(struct resmon_stat *stat, struct resmon_stat_mac mac,
 			   uint16_t fid);
 unsigned int resmon_stat_sfd_seqnn(const struct resmon_stat *stat);
+unsigned int resmon_stat_sfd_nrows(const struct resmon_stat *stat);
+int resmon_stat_sfd_next_row(struct resmon_stat *stat,
+			     struct resmon_stat_mac *mac,
+			     uint16_t *fid,
+			     enum resmon_stat_sfd_param_type *param_type,
+			     uint16_t *param,
+			     struct resmon_stat_kvd_alloc *kvd_alloc);
 
 int resmon_stat_sfdf_flush(struct resmon_stat *stat, uint16_t fid,
 			   enum resmon_stat_sfd_param_type param_type,
