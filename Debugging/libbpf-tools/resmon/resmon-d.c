@@ -332,6 +332,8 @@ put_table_obj:
 }
 
 static struct json_object *resmon_d_dump_ralue_next(struct resmon_stat *stat,
+						    char **error);
+static struct json_object *resmon_d_dump_ptar_next(struct resmon_stat *stat,
 						   char **error);
 
 static struct resmon_d_table_info resmon_d_tables[] = {
@@ -340,6 +342,12 @@ static struct resmon_d_table_info resmon_d_tables[] = {
 		.seqnn = resmon_stat_ralue_seqnn,
 		.nrows = resmon_stat_ralue_nrows,
 		.dump_next = resmon_d_dump_ralue_next,
+	},
+	{
+		.name = "ptar",
+		.seqnn = resmon_stat_ptar_seqnn,
+		.nrows = resmon_stat_ptar_nrows,
+		.dump_next = resmon_d_dump_ptar_next,
 	},
 };
 
@@ -466,6 +474,37 @@ put_row:
 	return -1;
 }
 
+static char *resmon_d_base64_encode(const uint8_t *in, size_t len)
+{
+	static const char tab[] =
+		"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+	size_t olen = 4 * ((len + 2) / 3) + 1;
+	char *buf, *out;
+
+	if (olen < len)
+		return NULL;
+
+	buf = malloc(olen);
+	if (buf == NULL)
+		return NULL;
+	out = buf;
+
+	for (size_t i = 0; i < len; i += 3) {
+		uint8_t a = i + 0 < len ? in[i + 0] : 0;
+		uint8_t b = i + 1 < len ? in[i + 1] : 0;
+		uint8_t c = i + 2 < len ? in[i + 2] : 0;
+		uint32_t abc = (a << 16) | b << 8 | c;
+
+		*out++ = tab[(abc >> 18) & 0x3f];
+		*out++ = tab[(abc >> 12) & 0x3f];
+		*out++ = tab[(abc >> 6) & 0x3f];
+		*out++ = tab[abc & 0x3f];
+	}
+	*out = '\0';
+
+	return buf;
+}
+
 static int resmon_d_dump_dip(struct json_object *obj, const char *key,
 			     enum mlxsw_reg_ralxx_protocol protocol,
 			     struct resmon_stat_dip dip,
@@ -488,6 +527,23 @@ static int resmon_d_dump_dip(struct json_object *obj, const char *key,
 
 	sprintf(strchr(buf, '\0'), "/%d", prefix_len);
 	return resmon_jrpc_object_add_str(obj, key, buf);
+}
+
+static int
+resmon_d_dump_tcam_region_info(struct json_object *obj, const char *key,
+			       struct resmon_stat_tcam_region_info tcam_region_info)
+{
+	char *str;
+	int err;
+
+	str = resmon_d_base64_encode(tcam_region_info.tcam_region_info,
+				     sizeof(tcam_region_info.tcam_region_info));
+	if (str == NULL)
+		return -1;
+
+	err = resmon_jrpc_object_add_str(obj, key, str);
+	free(str);
+	return err;
 }
 
 static int resmon_d_dump_kvda(struct json_object *obj,
@@ -549,6 +605,43 @@ err_form_row:
 	json_object_put(row);
 err_out:
 	resmon_fmterr(error, "Couldn't form ralue row: %m");
+	return NULL;
+}
+
+static struct json_object *resmon_d_dump_ptar_next(struct resmon_stat *stat,
+						   char **error)
+{
+	struct json_object *value; /* Observer pointer. */
+	struct json_object *key;   /* Observer pointer. */
+	struct json_object *row;   /* Owner of key and value. */
+	struct resmon_stat_tcam_region_info tcam_region_info;
+	struct resmon_stat_kvd_alloc kvda;
+	int err;
+
+	err = resmon_d_dump_row_alloc(&key, &value, &row, error);
+	if (err != 0)
+		return NULL;
+
+	err = resmon_stat_ptar_next_row(stat, &tcam_region_info, &kvda);
+	if (err != 0) {
+		*error = NULL;
+		return NULL;
+	}
+
+	err = resmon_d_dump_tcam_region_info(key, "tcam_region_info",
+					     tcam_region_info);
+	if (err != 0)
+		goto err_form_row;
+
+	err = resmon_d_dump_kvda(value, kvda);
+	if (err != 0)
+		goto err_form_row;
+
+	return row;
+
+err_form_row:
+	resmon_fmterr(error, "Couldn't form ptar row: %m");
+	json_object_put(row);
 	return NULL;
 }
 

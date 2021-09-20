@@ -237,6 +237,7 @@ resmon_stat_ptar_key(struct resmon_stat_tcam_region_info tcam_region_info)
 RESMON_STAT_KEY_HASH_FN(resmon_stat_ptar_hash, struct resmon_stat_ptar_key);
 RESMON_STAT_KEY_EQ_FN(resmon_stat_ptar_eq, struct resmon_stat_ptar_key);
 RESMON_STAT_SEQNN_FN(ptar);
+RESMON_STAT_NROWS_FN(ptar);
 
 struct resmon_stat_ptce3_key {
 	struct resmon_stat_key base;
@@ -659,6 +660,24 @@ int resmon_stat_ptar_get(struct resmon_stat *stat,
 		resmon_stat_ptar_key(tcam_region_info);
 
 	return resmon_table_get(&stat->ptar, &key.base, ret_kvd_alloc);
+}
+
+int
+resmon_stat_ptar_next_row(struct resmon_stat *stat,
+			 struct resmon_stat_tcam_region_info *tcam_region_info,
+			 struct resmon_stat_kvd_alloc *kvd_alloc)
+{
+	const struct lh_entry *e = resmon_table_next(&stat->ptar);
+
+	if (e == NULL)
+		return -1;
+
+	const struct resmon_stat_kvd_alloc *kvda = lh_entry_v(e);
+	const struct resmon_stat_ptar_key *key = lh_entry_k(e);
+
+	*tcam_region_info = key->tcam_region_info;
+	*kvd_alloc = *kvda;
+	return 0;
 }
 
 int
