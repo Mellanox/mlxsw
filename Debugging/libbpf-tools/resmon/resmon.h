@@ -296,6 +296,10 @@ int resmon_stat_kvdl_free(struct resmon_stat *stat,
 			  uint32_t index,
 			  struct resmon_stat_kvd_alloc kvd_alloc);
 unsigned int resmon_stat_kvdl_seqnn(const struct resmon_stat *stat);
+unsigned int resmon_stat_kvdl_nrows(const struct resmon_stat *stat);
+int resmon_stat_kvdl_next_row(struct resmon_stat *stat,
+			      uint32_t *index,
+			      struct resmon_stat_kvd_alloc *kvd_alloc);
 
 int resmon_stat_rauht_update(struct resmon_stat *stat,
 			     enum mlxsw_reg_ralxx_protocol protocol,

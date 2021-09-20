@@ -290,6 +290,7 @@ resmon_stat_kvdl_key(uint32_t index, enum resmon_resource resource)
 RESMON_STAT_KEY_HASH_FN(resmon_stat_kvdl_hash, struct resmon_stat_kvdl_key);
 RESMON_STAT_KEY_EQ_FN(resmon_stat_kvdl_eq, struct resmon_stat_kvdl_key);
 RESMON_STAT_SEQNN_FN(kvdl);
+RESMON_STAT_NROWS_FN(kvdl);
 
 struct resmon_stat_rauht_key {
 	struct resmon_stat_key base;
@@ -826,6 +827,23 @@ int resmon_stat_kvdl_free(struct resmon_stat *stat,
 	}
 
 	return rc;
+}
+
+int resmon_stat_kvdl_next_row(struct resmon_stat *stat,
+			      uint32_t *index,
+			      struct resmon_stat_kvd_alloc *kvd_alloc)
+{
+	const struct lh_entry *e = resmon_table_next(&stat->kvdl);
+
+	if (e == NULL)
+		return -1;
+
+	const struct resmon_stat_kvd_alloc *kvda = lh_entry_v(e);
+	const struct resmon_stat_kvdl_key *key = lh_entry_k(e);
+
+	*index = key->index;
+	*kvd_alloc = *kvda;
+	return 0;
 }
 
 static int

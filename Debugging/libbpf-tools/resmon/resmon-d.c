@@ -337,6 +337,8 @@ static struct json_object *resmon_d_dump_ptar_next(struct resmon_stat *stat,
 						   char **error);
 static struct json_object *resmon_d_dump_ptce3_next(struct resmon_stat *stat,
 						    char **error);
+static struct json_object *resmon_d_dump_kvdl_next(struct resmon_stat *stat,
+						   char **error);
 
 static struct resmon_d_table_info resmon_d_tables[] = {
 	{
@@ -356,6 +358,12 @@ static struct resmon_d_table_info resmon_d_tables[] = {
 		.seqnn = resmon_stat_ptce3_seqnn,
 		.nrows = resmon_stat_ptce3_nrows,
 		.dump_next = resmon_d_dump_ptce3_next,
+	},
+	{
+		.name = "kvdl",
+		.seqnn = resmon_stat_kvdl_seqnn,
+		.nrows = resmon_stat_kvdl_nrows,
+		.dump_next = resmon_d_dump_kvdl_next,
 	},
 };
 
@@ -732,6 +740,47 @@ static struct json_object *resmon_d_dump_ptce3_next(struct resmon_stat *stat,
 
 err_form_row:
 	resmon_fmterr(error, "Couldn't form ptce3 row: %m");
+	json_object_put(row);
+	return NULL;
+}
+
+static struct json_object *resmon_d_dump_kvdl_next(struct resmon_stat *stat,
+						   char **error)
+{
+	struct json_object *value; /* Observer pointer. */
+	struct json_object *key;   /* Observer pointer. */
+	struct json_object *row;   /* Owner of key and value. */
+	struct resmon_stat_kvd_alloc kvd_alloc;
+	uint32_t index;
+	int err;
+
+	err = resmon_d_dump_row_alloc(&key, &value, &row, error);
+	if (err != 0)
+		return NULL;
+
+	err = resmon_stat_kvdl_next_row(stat, &index, &kvd_alloc);
+	if (err != 0) {
+		*error = NULL;
+		return NULL;
+	}
+
+	err = resmon_jrpc_object_add_int(key, "index", index);
+	if (err != 0)
+		goto err_form_row;
+
+	err = resmon_jrpc_object_add_str(key, "resource",
+				    resmon_d_gauge_names[kvd_alloc.resource]);
+	if (err != 0)
+		goto err_form_row;
+
+	/* No need to dump slots, it carries no information. There is
+	 * actually no value, all is in the key!
+	 */
+	assert(kvd_alloc.slots == 1);
+	return row;
+
+err_form_row:
+	resmon_fmterr(error, "Couldn't form kvdl row: %m");
 	json_object_put(row);
 	return NULL;
 }
