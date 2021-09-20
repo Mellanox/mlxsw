@@ -94,30 +94,24 @@ static bool resmon_c_result_show_json(struct json_object *result)
 	return false;
 }
 
-static struct json_object *resmon_c_send_request(struct json_object *request)
+static struct json_object *resmon_c_send_request_on(struct json_object *request,
+						    struct resmon_sock *cli,
+						    struct resmon_sock *peer)
 {
 	struct json_object *response_obj = NULL;
-	struct resmon_sock peer;
-	struct resmon_sock cli;
 	char *response;
 	int err;
 
-	err = resmon_sock_open_c(&cli, &peer, env.sockdir);
+	err = resmon_jrpc_send(peer, request);
 	if (err < 0) {
-		fprintf(stderr, "Failed to open a socket: %m\n");
+		fprintf(stderr, "Failed to send the RPC message: %m\n");
 		return NULL;
 	}
 
-	err = resmon_jrpc_send(&peer, request);
-	if (err < 0) {
-		fprintf(stderr, "Failed to send the RPC message: %m\n");
-		goto close_fd;
-	}
-
-	err = resmon_sock_recv(&cli, &peer, &response);
+	err = resmon_sock_recv(cli, peer, &response);
 	if (err < 0) {
 		fprintf(stderr, "Failed to receive an RPC response\n");
-		goto close_fd;
+		return NULL;
 	}
 
 	response_obj = json_tokener_parse(response);
@@ -128,7 +122,24 @@ static struct json_object *resmon_c_send_request(struct json_object *request)
 
 free_response:
 	free(response);
-close_fd:
+	return response_obj;
+}
+
+static struct json_object *resmon_c_send_request(struct json_object *request)
+{
+	struct json_object *response_obj = NULL;
+	struct resmon_sock peer;
+	struct resmon_sock cli;
+	int err;
+
+	err = resmon_sock_open_c(&cli, &peer, env.sockdir);
+	if (err < 0) {
+		fprintf(stderr, "Failed to open a socket: %m\n");
+		return NULL;
+	}
+
+	response_obj = resmon_c_send_request_on(request, &cli, &peer);
+
 	resmon_sock_close_c(&cli);
 	return response_obj;
 }
