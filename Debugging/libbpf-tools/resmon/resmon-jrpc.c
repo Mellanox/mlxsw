@@ -284,6 +284,21 @@ static bool resmon_jrpc_validate_version(struct json_object *ver_obj,
 	return true;
 }
 
+static int resmon_jrpc_extract_uint64(const char *key, struct json_object *obj,
+				      uint64_t *pvalue64, char **error)
+{
+	int64_t value;
+
+	value = json_object_get_int64(obj);
+	if (value < 0) {
+		resmon_fmterr(error, "Invalid %s < 0", key);
+		return -1;
+	}
+
+	*pvalue64 = (uint64_t) value;
+	return 0;
+}
+
 int resmon_jrpc_dissect_request(struct json_object *obj,
 				struct json_object **id,
 				const char **method,
@@ -459,7 +474,7 @@ resmon_jrpc_dissect_stats_gauge(struct json_object *gauge_obj,
 	};
 	struct json_object *values[ARRAY_SIZE(policy)] = {};
 	bool seen[ARRAY_SIZE(policy)] = {};
-	int64_t capacity;
+	uint64_t capacity;
 	int err;
 
 	err = resmon_jrpc_dissect(gauge_obj, policy, seen, values,
@@ -467,11 +482,11 @@ resmon_jrpc_dissect_stats_gauge(struct json_object *gauge_obj,
 	if (err)
 		return err;
 
-	capacity = json_object_get_int64(values[pol_capacity]);
-	if (capacity < 0) {
-		resmon_fmterr(error, "Invalid capacity < 0");
-		return -1;
-	}
+	err = resmon_jrpc_extract_uint64(policy[pol_capacity].key,
+					 values[pol_capacity],
+					 &capacity, error);
+	if (err != 0)
+		return err;
 
 	*pgauge = (struct resmon_jrpc_gauge) {
 		.descr = json_object_get_string(values[pol_descr]),
