@@ -8,6 +8,18 @@
 
 struct resmon_table {
 	struct lh_table *lh;
+	unsigned int seqnn;
+};
+
+struct resmon_stat {
+	struct resmon_stat_gauges gauges;
+	struct resmon_table ralue;
+	struct resmon_table ptar;
+	struct resmon_table ptce3;
+	struct resmon_table kvdl;
+	struct resmon_table rauht;
+	struct resmon_table sfd; /* resmon_stat_sfd_key -> resmon_stat_sfd_val */
+	struct resmon_table svfa;
 };
 
 static void resmon_stat_entry_free(struct lh_entry *e)
@@ -24,6 +36,7 @@ static int resmon_table_init(struct resmon_table *tab,
 	if (tab->lh == NULL)
 		return -1;
 
+	tab->seqnn = 0;
 	return 0;
 }
 
@@ -39,6 +52,11 @@ static void resmon_table_fini(struct resmon_table *tab)
 
 #define RESMON_TABLE_FINI(STAT, NAME)				\
 	resmon_table_fini(&(STAT)->NAME)
+
+static void resmon_table_bump_seqnn(struct resmon_table *tab)
+{
+	tab->seqnn++;
+}
 
 /* Fowler-Noll-Vo hash, variant FNV-1 */
 static uint64_t resmon_stat_fnv_1(const void *ptr, size_t len)
@@ -80,6 +98,15 @@ resmon_stat_key_copy(const struct resmon_stat_key *key, size_t size)
 		return memcmp(k1, k2, sizeof(type)) == 0;		\
 	}
 
+#define RESMON_STAT_SEQNN_FN(name)					\
+	unsigned int							\
+	resmon_stat_ ## name ## _seqnn(const struct resmon_stat *stat)	\
+	{								\
+		const struct resmon_table *tab = &(stat->name);		\
+									\
+		return tab->seqnn;					\
+	}
+
 struct resmon_stat_ralue_key {
 	struct resmon_stat_key base;
 	enum mlxsw_reg_ralxx_protocol protocol;
@@ -104,6 +131,7 @@ resmon_stat_ralue_key(enum mlxsw_reg_ralxx_protocol protocol,
 
 RESMON_STAT_KEY_HASH_FN(resmon_stat_ralue_hash, struct resmon_stat_ralue_key);
 RESMON_STAT_KEY_EQ_FN(resmon_stat_ralue_eq, struct resmon_stat_ralue_key);
+RESMON_STAT_SEQNN_FN(ralue);
 
 struct resmon_stat_ptar_key {
 	struct resmon_stat_key base;
@@ -120,6 +148,7 @@ resmon_stat_ptar_key(struct resmon_stat_tcam_region_info tcam_region_info)
 
 RESMON_STAT_KEY_HASH_FN(resmon_stat_ptar_hash, struct resmon_stat_ptar_key);
 RESMON_STAT_KEY_EQ_FN(resmon_stat_ptar_eq, struct resmon_stat_ptar_key);
+RESMON_STAT_SEQNN_FN(ptar);
 
 struct resmon_stat_ptce3_key {
 	struct resmon_stat_key base;
@@ -151,6 +180,7 @@ resmon_stat_ptce3_key(struct resmon_stat_tcam_region_info tcam_region_info,
 
 RESMON_STAT_KEY_HASH_FN(resmon_stat_ptce3_hash, struct resmon_stat_ptce3_key);
 RESMON_STAT_KEY_EQ_FN(resmon_stat_ptce3_eq, struct resmon_stat_ptce3_key);
+RESMON_STAT_SEQNN_FN(ptce3);
 
 struct resmon_stat_kvdl_key {
 	struct resmon_stat_key base;
@@ -169,6 +199,7 @@ resmon_stat_kvdl_key(uint32_t index, enum resmon_resource resource)
 
 RESMON_STAT_KEY_HASH_FN(resmon_stat_kvdl_hash, struct resmon_stat_kvdl_key);
 RESMON_STAT_KEY_EQ_FN(resmon_stat_kvdl_eq, struct resmon_stat_kvdl_key);
+RESMON_STAT_SEQNN_FN(kvdl);
 
 struct resmon_stat_rauht_key {
 	struct resmon_stat_key base;
@@ -191,6 +222,7 @@ resmon_stat_rauht_key(enum mlxsw_reg_ralxx_protocol protocol,
 
 RESMON_STAT_KEY_HASH_FN(resmon_stat_rauht_hash, struct resmon_stat_rauht_key);
 RESMON_STAT_KEY_EQ_FN(resmon_stat_rauht_eq, struct resmon_stat_rauht_key);
+RESMON_STAT_SEQNN_FN(rauht);
 
 struct resmon_stat_sfd_key {
 	struct resmon_stat_key base;
@@ -215,6 +247,7 @@ struct resmon_stat_sfd_val {
 
 RESMON_STAT_KEY_HASH_FN(resmon_stat_sfd_hash, struct resmon_stat_sfd_key);
 RESMON_STAT_KEY_EQ_FN(resmon_stat_sfd_eq, struct resmon_stat_sfd_key);
+RESMON_STAT_SEQNN_FN(sfd);
 
 struct resmon_stat_svfa_key {
 	struct resmon_stat_key base;
@@ -236,17 +269,7 @@ resmon_stat_svfa_key(enum mlxsw_reg_svfa_mt mapping_table, uint16_t local_port,
 
 RESMON_STAT_KEY_HASH_FN(resmon_stat_svfa_hash, struct resmon_stat_svfa_key);
 RESMON_STAT_KEY_EQ_FN(resmon_stat_svfa_eq, struct resmon_stat_svfa_key);
-
-struct resmon_stat {
-	struct resmon_stat_gauges gauges;
-	struct resmon_table ralue;
-	struct resmon_table ptar;
-	struct resmon_table ptce3;
-	struct resmon_table kvdl;
-	struct resmon_table rauht;
-	struct resmon_table sfd; /* resmon_stat_sfd_key -> resmon_stat_sfd_val */
-	struct resmon_table svfa;
-};
+RESMON_STAT_SEQNN_FN(svfa);
 
 static struct resmon_stat_kvd_alloc *
 resmon_stat_kvd_alloc_copy(struct resmon_stat_kvd_alloc kvd_alloc)
@@ -399,6 +422,7 @@ resmon_table_update_nostats(struct resmon_stat *stat,
 	if (rc)
 		goto free_kvd_alloc;
 
+	resmon_table_bump_seqnn(tab);
 	return 0;
 
 free_kvd_alloc:
@@ -446,6 +470,8 @@ static int resmon_table_delete_nostats(struct resmon_stat *stat,
 	*kvd_alloc = *vp;
 	rc = lh_table_delete_entry(tab->lh, e);
 	assert(rc == 0);
+
+	resmon_table_bump_seqnn(tab);
 	return 0;
 }
 
@@ -673,7 +699,7 @@ resmon_stat_lh_sfd_insert(struct resmon_stat *stat,
 		goto free_val;
 
 	resmon_stat_gauge_inc(stat, kvd_alloc);
-
+	resmon_table_bump_seqnn(&stat->sfd);
 	return 0;
 
 free_val:
@@ -696,6 +722,7 @@ static int resmon_stat_sfd_delete_entry(struct resmon_stat *stat,
 	rc = lh_table_delete_entry(stat->sfd.lh, e);
 	assert(rc == 0);
 	resmon_stat_gauge_dec(stat, kvd_alloc);
+	resmon_table_bump_seqnn(&stat->sfd);
 	return 0;
 }
 
@@ -733,6 +760,7 @@ resmon_stat_sfd_update(struct resmon_stat *stat, struct resmon_stat_mac mac,
 		vp = lh_entry_v(e);
 		vp->param_type = param_type;
 		vp->param = param;
+		resmon_table_bump_seqnn(&stat->sfd);
 		return 0;
 	}
 

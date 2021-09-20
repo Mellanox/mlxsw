@@ -215,6 +215,7 @@ int resmon_stat_ralue_delete(struct resmon_stat *stat,
 			     uint8_t prefix_len,
 			     uint16_t virtual_router,
 			     struct resmon_stat_dip dip);
+unsigned int resmon_stat_ralue_seqnn(const struct resmon_stat *stat);
 
 int resmon_stat_ptar_alloc(struct resmon_stat *stat,
 			   struct resmon_stat_tcam_region_info region_info,
@@ -224,6 +225,7 @@ int resmon_stat_ptar_free(struct resmon_stat *stat,
 int resmon_stat_ptar_get(struct resmon_stat *stat,
 			 struct resmon_stat_tcam_region_info region_info,
 			 struct resmon_stat_kvd_alloc *ret_kvd_alloc);
+unsigned int resmon_stat_ptar_seqnn(const struct resmon_stat *stat);
 
 int resmon_stat_ptce3_alloc(struct resmon_stat *stat,
 			struct resmon_stat_tcam_region_info tcam_region_info,
@@ -240,6 +242,7 @@ int resmon_stat_ptce3_free(struct resmon_stat *stat,
 		       uint8_t delta_value,
 		       uint16_t delta_start,
 		       uint8_t erp_id);
+unsigned int resmon_stat_ptce3_seqnn(const struct resmon_stat *stat);
 
 int resmon_stat_kvdl_alloc(struct resmon_stat *stat,
 			   uint32_t index,
@@ -247,6 +250,7 @@ int resmon_stat_kvdl_alloc(struct resmon_stat *stat,
 int resmon_stat_kvdl_free(struct resmon_stat *stat,
 			  uint32_t index,
 			  struct resmon_stat_kvd_alloc kvd_alloc);
+unsigned int resmon_stat_kvdl_seqnn(const struct resmon_stat *stat);
 
 int resmon_stat_rauht_update(struct resmon_stat *stat,
 			     enum mlxsw_reg_ralxx_protocol protocol,
@@ -257,6 +261,7 @@ int resmon_stat_rauht_delete(struct resmon_stat *stat,
 			     enum mlxsw_reg_ralxx_protocol protocol,
 			     uint16_t rif,
 			     struct resmon_stat_dip dip);
+unsigned int resmon_stat_rauht_seqnn(const struct resmon_stat *stat);
 
 int
 resmon_stat_sfd_update(struct resmon_stat *stat, struct resmon_stat_mac mac,
@@ -264,6 +269,7 @@ resmon_stat_sfd_update(struct resmon_stat *stat, struct resmon_stat_mac mac,
 		       uint16_t param, struct resmon_stat_kvd_alloc kvd_alloc);
 int resmon_stat_sfd_delete(struct resmon_stat *stat, struct resmon_stat_mac mac,
 			   uint16_t fid);
+unsigned int resmon_stat_sfd_seqnn(const struct resmon_stat *stat);
 
 int resmon_stat_sfdf_flush(struct resmon_stat *stat, uint16_t fid,
 			   enum resmon_stat_sfd_param_type param_type,
@@ -276,6 +282,7 @@ int resmon_stat_svfa_update(struct resmon_stat *stat,
 int resmon_stat_svfa_delete(struct resmon_stat *stat,
 			    enum mlxsw_reg_svfa_mt mapping_table,
 			    uint16_t local_port, uint32_t vid_vni);
+unsigned int resmon_stat_svfa_seqnn(const struct resmon_stat *stat);
 
 /* resmon-dl.c */
 
