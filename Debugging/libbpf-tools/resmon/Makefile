@@ -39,6 +39,7 @@ MAN_PAGES :=				\
 	$(OUTPUT)/resmon-ping.8		\
 	$(OUTPUT)/resmon-stats.8	\
 	$(OUTPUT)/resmon-emad.8		\
+	$(OUTPUT)/resmon-dump.8		\
 	#
 
 BUILT := $(APPS) $(SYSTEMD_UNITS) $(MAN_PAGES)

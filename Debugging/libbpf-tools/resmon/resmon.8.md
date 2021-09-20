@@ -10,7 +10,8 @@ SYNOPSIS
 
 `resmon -V`
 
-`resmon [-v | -q] [--json] [--sockdir <PATH>] {start | stop | ping | emad | stats}`
+`resmon [-v | -q] [--json] [--sockdir <PATH>]
+{start | stop | ping | emad | stats | dump}`
 
 DESCRIPTION
 ===========
@@ -103,11 +104,16 @@ COMMANDS
 : Injects a hardware configuration message to the daemon. Only available in
   mock mode.
 
+`dump`
+
+: Show the contents of the tables that the daemon uses to keep track of
+  resource allocation.
+
 SEE ALSO
 ========
 
 resmon-start(8), resmon-stop(8), resmon-stats(8), resmon-ping(8),
-resmon-emad(8)
+resmon-emad(8), resmon-dump(8)
 
 [JSON RPC specification][JSON RPC].
 
