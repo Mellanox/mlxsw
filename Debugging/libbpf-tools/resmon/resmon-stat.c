@@ -9,7 +9,11 @@
 struct resmon_table {
 	struct lh_table *lh;
 	unsigned int seqnn;
+
+	struct lh_entry *cursor;
 };
+
+struct resmon_stat_key {};
 
 struct resmon_stat {
 	struct resmon_stat_gauges gauges;
@@ -37,6 +41,7 @@ static int resmon_table_init(struct resmon_table *tab,
 		return -1;
 
 	tab->seqnn = 0;
+	tab->cursor = NULL;
 	return 0;
 }
 
@@ -52,6 +57,48 @@ static void resmon_table_fini(struct resmon_table *tab)
 
 #define RESMON_TABLE_FINI(STAT, NAME)				\
 	resmon_table_fini(&(STAT)->NAME)
+
+struct lh_entry *const resmon_table_cursor_done = (struct lh_entry *) 1;
+
+static int resmon_table_insert_w_hash(struct resmon_table *tab,
+				      struct resmon_stat_key *key,
+				      void *v, const unsigned long h,
+				      const unsigned int opts)
+{
+	int old_size = tab->lh->size;
+	int rc;
+
+	rc = lh_table_insert_w_hash(tab->lh, key, v, h, 0);
+
+	if (tab->lh->size != old_size && tab->cursor != NULL)
+		tab->cursor = resmon_table_cursor_done;
+
+	return rc;
+}
+
+static void resmon_table_cursor_step(struct resmon_table *tab)
+{
+	tab->cursor = tab->cursor->next;
+	if (tab->cursor == NULL)
+		tab->cursor = resmon_table_cursor_done;
+}
+
+static int resmon_table_delete_entry(struct resmon_table *tab,
+				     struct lh_entry *entry)
+{
+	int old_size = tab->lh->size;
+	int rc;
+
+	if (tab->cursor == entry)
+		resmon_table_cursor_step(tab);
+
+	rc = lh_table_delete_entry(tab->lh, entry);
+
+	if (tab->lh->size != old_size && tab->cursor != NULL)
+		tab->cursor = resmon_table_cursor_done;
+
+	return rc;
+}
 
 static void resmon_table_bump_seqnn(struct resmon_table *tab)
 {
@@ -70,8 +117,6 @@ static uint64_t resmon_stat_fnv_1(const void *ptr, size_t len)
 	}
 	return hash;
 }
-
-struct resmon_stat_key {};
 
 static struct resmon_stat_key *
 resmon_stat_key_copy(const struct resmon_stat_key *key, size_t size)
@@ -418,7 +463,7 @@ resmon_table_update_nostats(struct resmon_stat *stat,
 	if (kvd_alloc == NULL)
 		goto free_key;
 
-	rc = lh_table_insert_w_hash(tab->lh, key, kvd_alloc, hash, 0);
+	rc = resmon_table_insert_w_hash(tab, key, kvd_alloc, hash, 0);
 	if (rc)
 		goto free_kvd_alloc;
 
@@ -468,7 +513,7 @@ static int resmon_table_delete_nostats(struct resmon_stat *stat,
 
 	vp = e->v;
 	*kvd_alloc = *vp;
-	rc = lh_table_delete_entry(tab->lh, e);
+	rc = resmon_table_delete_entry(tab, e);
 	assert(rc == 0);
 
 	resmon_table_bump_seqnn(tab);
@@ -694,7 +739,7 @@ resmon_stat_lh_sfd_insert(struct resmon_stat *stat,
 	val->param = param;
 	val->kvd_alloc = kvd_alloc;
 
-	rc = lh_table_insert_w_hash(stat->sfd.lh, key, val, hash, 0);
+	rc = resmon_table_insert_w_hash(&stat->sfd, key, val, hash, 0);
 	if (rc)
 		goto free_val;
 
@@ -718,8 +763,7 @@ static int resmon_stat_sfd_delete_entry(struct resmon_stat *stat,
 
 	vp = e->v;
 	kvd_alloc = vp->kvd_alloc;
-
-	rc = lh_table_delete_entry(stat->sfd.lh, e);
+	rc = resmon_table_delete_entry(&stat->sfd, e);
 	assert(rc == 0);
 	resmon_stat_gauge_dec(stat, kvd_alloc);
 	resmon_table_bump_seqnn(&stat->sfd);

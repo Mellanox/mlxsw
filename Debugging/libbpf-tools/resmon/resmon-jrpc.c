@@ -499,6 +499,30 @@ int resmon_jrpc_dissect_params_emad(struct json_object *obj,
 	return 0;
 }
 
+int resmon_jrpc_dissect_params_dump_next(struct json_object *obj,
+					 const char **table,
+					 char **error)
+{
+	enum {
+		pol_table,
+	};
+	struct resmon_jrpc_policy policy[] = {
+		[pol_table] = { .key = "table", .type = json_type_string,
+				.required = true },
+	};
+	struct json_object *values[ARRAY_SIZE(policy)] = {};
+	bool seen[ARRAY_SIZE(policy)] = {};
+	int err;
+
+	err = resmon_jrpc_dissect(obj, policy, seen, values,
+				  ARRAY_SIZE(policy), error);
+	if (err != 0)
+		return err;
+
+	*table = json_object_get_string(values[pol_table]);
+	return 0;
+}
+
 static int
 resmon_jrpc_dissect_stats_gauge(struct json_object *gauge_obj,
 				struct resmon_jrpc_gauge *pgauge,
@@ -634,6 +658,7 @@ resmon_jrpc_dissect_tables_table(struct json_object *table_obj,
 	bool seen[ARRAY_SIZE(policy)] = {};
 	uint32_t nrows;
 	uint32_t seqnn;
+	char *name;
 	int err;
 
 	err = resmon_jrpc_dissect(table_obj, policy, seen, values,
@@ -651,12 +676,26 @@ resmon_jrpc_dissect_tables_table(struct json_object *table_obj,
 	if (err != 0)
 		return err;
 
+	name = strdup(json_object_get_string(values[pol_name]));
+	if (name == NULL) {
+		resmon_fmterr(error, "Couldn't allocate table name: %m");
+		return -1;
+	}
+
 	*ptable = (struct resmon_jrpc_table) {
-		.name = json_object_get_string(values[pol_name]),
+		.name = name,
 		.nrows = nrows,
 		.seqnn = seqnn,
 	};
 	return 0;
+}
+
+void resmon_jrpc_tables_free(struct resmon_jrpc_table *tables,
+			     size_t num_tables)
+{
+	for (size_t i = 0; i < num_tables; i++)
+		free(tables[i].name);
+	free(tables);
 }
 
 static int
@@ -725,6 +764,74 @@ int resmon_jrpc_dissect_get_tables(struct json_object *obj,
 	return resmon_jrpc_dissect_get_tables_tables(values[pol_tables],
 						     tables, num_tables,
 						     error);
+}
+
+static int resmon_jrpc_dissect_dump_row_row(struct json_object *row_obj,
+					    struct resmon_jrpc_dump_row *row,
+					    char **error)
+{
+	enum {
+		pol_key,
+		pol_value,
+	};
+	struct resmon_jrpc_policy policy[] = {
+		[pol_key] = { .key = "key", .type = json_type_object,
+			      .required = true },
+		[pol_value] = { .key = "value", .type = json_type_object,
+				.required = true },
+	};
+	struct json_object *values[ARRAY_SIZE(policy)] = {};
+	bool seen[ARRAY_SIZE(policy)] = {};
+	int err;
+
+	err = resmon_jrpc_dissect(row_obj, policy, seen, values,
+				  ARRAY_SIZE(policy), error);
+	if (err != 0)
+		return err;
+
+	/* row->X are Rc pointers, so get them. */
+	row->key = json_object_get(values[pol_key]);
+	row->value = json_object_get(values[pol_value]);
+	return 0;
+}
+
+int resmon_jrpc_dissect_dump_next(struct json_object *obj, const char *table_name,
+				  struct resmon_jrpc_dump_row *row, char **error)
+{
+	/* Result for query with "dump_next" method is supposed to look
+	 * either like this:
+	 *     { "row": { "key": {...}, "value": {...} } }
+	 *
+	 * Or like this, if the iteration is over:
+	 *     { "row": null }
+	 */
+	enum {
+		pol_row,
+	};
+	struct resmon_jrpc_policy policy[] = {
+		[pol_row] = { .key = "row", .any_type = true,
+			      .required = true },
+	};
+	struct json_object *values[ARRAY_SIZE(policy)] = {};
+	bool seen[ARRAY_SIZE(policy)] = {};
+	enum json_type type;
+	int err;
+
+	err = resmon_jrpc_dissect(obj, policy, seen, values,
+				  ARRAY_SIZE(policy), error);
+	if (err != 0)
+		return err;
+
+	type = json_object_get_type(values[pol_row]);
+	if (type == json_type_object)
+		return resmon_jrpc_dissect_dump_row_row(values[pol_row],
+							row, error);
+	if (type == json_type_null)
+		return 1;
+
+	resmon_fmterr(error, "The member row is expected to be either an object, or a null, but is %s",
+		      json_type_to_name(type));
+	return -1;
 }
 
 int resmon_jrpc_send(struct resmon_sock *sock, struct json_object *obj)

@@ -108,6 +108,9 @@ int resmon_jrpc_dissect_params_emad(struct json_object *obj,
 				    const char **payload,
 				    size_t *payload_len,
 				    char **error);
+int resmon_jrpc_dissect_params_dump_next(struct json_object *obj,
+					 const char **table,
+					 char **error);
 
 struct resmon_jrpc_gauge {
 	const char *descr;
@@ -120,13 +123,25 @@ int resmon_jrpc_dissect_stats(struct json_object *obj,
 			      char **error);
 
 struct resmon_jrpc_table {
-	const char *name;
+	char *name;
 	uint32_t nrows;
 	uint32_t seqnn;
 };
 int resmon_jrpc_dissect_get_tables(struct json_object *obj,
 				   struct resmon_jrpc_table **tables,
 				   size_t *num_tables, char **error);
+void resmon_jrpc_tables_free(struct resmon_jrpc_table *tables,
+			     size_t num_tables);
+
+struct resmon_jrpc_dump_row {
+	struct json_object *key;   /* Rc pointer. */
+	struct json_object *value; /* Rc pointer. */
+};
+
+int resmon_jrpc_dissect_dump_next(struct json_object *obj,
+				  const char *table_name,
+				  struct resmon_jrpc_dump_row *row,
+				  char **error);
 
 int resmon_jrpc_send(struct resmon_sock *sock, struct json_object *obj);
 
