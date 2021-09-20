@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <syslog.h>
 #include <ctype.h>
+#include <arpa/inet.h>
 #include <json-c/json_object.h>
 #include <json-c/json_tokener.h>
 #include <systemd/sd-daemon.h>
@@ -330,7 +331,16 @@ put_table_obj:
 	return -1;
 }
 
+static struct json_object *resmon_d_dump_ralue_next(struct resmon_stat *stat,
+						   char **error);
+
 static struct resmon_d_table_info resmon_d_tables[] = {
+	{
+		.name = "ralue",
+		.seqnn = resmon_stat_ralue_seqnn,
+		.nrows = resmon_stat_ralue_nrows,
+		.dump_next = resmon_d_dump_ralue_next,
+	},
 };
 
 static void resmon_d_handle_get_tables(const struct resmon_stat *stat,
@@ -398,6 +408,148 @@ put_result_obj:
 put_obj:
 	json_object_put(obj);
 	resmon_d_respond_memerr(peer, id);
+}
+
+static int resmon_d_dump_row_alloc(struct json_object **pkey,
+				   struct json_object **pvalue,
+				   struct json_object **prow,
+				   char **error)
+{
+	struct json_object *value;
+	struct json_object *key;
+	struct json_object *row;
+	int err;
+
+	row = json_object_new_object();
+	if (row == NULL) {
+		resmon_fmterr(error, "Couldn't allocate row: %m");
+		return -1;
+	}
+
+	value = json_object_new_object();
+	if (value == NULL) {
+		resmon_fmterr(error, "Couldn't allocate value: %m");
+		goto put_row;
+	}
+
+	key = json_object_new_object();
+	if (key == NULL) {
+		resmon_fmterr(error, "Couldn't allocate key: %m");
+		goto put_value;
+	}
+
+	err = json_object_object_add(row, "key", key);
+	if (err != 0) {
+		resmon_fmterr(error, "Couldn't attach key to row: %m");
+		goto put_key;
+	}
+	/* N.B.: `key' is now owned by `row', the local merely references it. */
+
+	err = json_object_object_add(row, "value", value);
+	if (err != 0) {
+		resmon_fmterr(error, "Couldn't attach value to row: %m");
+		goto put_value;
+	}
+	/* N.B.: `value' now owned by `row' as well. */
+
+	*pkey = key;
+	*pvalue = value;
+	*prow = row;
+	return 0;
+
+put_key:
+	json_object_put(key);
+put_value:
+	json_object_put(value);
+put_row:
+	json_object_put(row);
+	return -1;
+}
+
+static int resmon_d_dump_dip(struct json_object *obj, const char *key,
+			     enum mlxsw_reg_ralxx_protocol protocol,
+			     struct resmon_stat_dip dip,
+			     uint8_t prefix_len)
+{
+	char buf[INET6_ADDRSTRLEN + 4]; /* +"/%d" for prefix length */
+	int af;
+
+	switch (protocol) {
+	case MLXSW_REG_RALXX_PROTOCOL_IPV4:
+		af = AF_INET;
+		break;
+	case MLXSW_REG_RALXX_PROTOCOL_IPV6:
+		af = AF_INET6;
+		break;
+	}
+
+	if (inet_ntop(af, &dip, buf, sizeof(buf)) == NULL)
+		return -1;
+
+	sprintf(strchr(buf, '\0'), "/%d", prefix_len);
+	return resmon_jrpc_object_add_str(obj, key, buf);
+}
+
+static int resmon_d_dump_kvda(struct json_object *obj,
+			      struct resmon_stat_kvd_alloc kvda)
+{
+	int err;
+
+	err = resmon_jrpc_object_add_str(obj, "resource",
+					 resmon_d_gauge_names[kvda.resource]);
+	if (err != 0)
+		return err;
+
+	err = resmon_jrpc_object_add_int(obj, "slots", kvda.slots);
+	if (err != 0)
+		return err;
+
+	return 0;
+}
+
+static struct json_object *resmon_d_dump_ralue_next(struct resmon_stat *stat,
+						    char **error)
+{
+	struct json_object *value; /* Observer pointer. */
+	struct json_object *key;   /* Observer pointer. */
+	struct json_object *row;   /* Owner of key and value. */
+	enum mlxsw_reg_ralxx_protocol protocol;
+	struct resmon_stat_kvd_alloc kvda;
+	struct resmon_stat_dip dip;
+	uint16_t virtual_router;
+	uint8_t prefix_len;
+	int err;
+
+	err = resmon_stat_ralue_next_row(stat, &protocol, &prefix_len,
+					 &virtual_router, &dip, &kvda);
+	if (err != 0) {
+		*error = NULL;
+		return NULL;
+	}
+
+	err = resmon_d_dump_row_alloc(&key, &value, &row, error);
+	if (err != 0)
+		goto err_out;
+
+	err = resmon_d_dump_dip(key, "dip", protocol, dip, prefix_len);
+	if (err != 0)
+		goto err_form_row;
+
+	err = resmon_jrpc_object_add_int(key, "vr", virtual_router);
+	if (err != 0)
+		goto err_form_row;
+
+	err = resmon_d_dump_kvda(value, kvda);
+	if (err != 0)
+		goto err_form_row;
+
+	return row;
+
+err_form_row:
+	json_object_put(row);
+err_out:
+	resmon_fmterr(error, "Couldn't form ralue row: %m");
+	return NULL;
 }
 
 static void resmon_d_handle_dump_next(struct resmon_stat *stat,

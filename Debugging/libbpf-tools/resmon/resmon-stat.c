@@ -100,9 +100,42 @@ static int resmon_table_delete_entry(struct resmon_table *tab,
 	return rc;
 }
 
+static struct lh_entry *resmon_table_next(struct resmon_table *tab)
+{
+	struct lh_entry *ret;
+
+	if (tab->cursor == resmon_table_cursor_done) {
+		/* End iteration. */
+		tab->cursor = NULL;
+		return NULL;
+	}
+
+	if (tab->cursor == NULL) {
+		/* Start iteration. */
+		tab->cursor = tab->lh->head;
+		if (tab->cursor == NULL)
+			/* If there are no entries, there's no need to go
+			 * through the done marker. Just return NULL right
+			 * away, no iteration will take place at all.
+			 */
+			return NULL;
+	}
+
+	/* Iteration step. */
+	ret = tab->cursor;
+	resmon_table_cursor_step(tab);
+
+	return ret;
+}
+
 static void resmon_table_bump_seqnn(struct resmon_table *tab)
 {
 	tab->seqnn++;
+}
+
+static unsigned int resmon_table_nrows(const struct resmon_table *tab)
+{
+	return lh_table_length(tab->lh);
 }
 
 /* Fowler-Noll-Vo hash, variant FNV-1 */
@@ -152,6 +185,15 @@ resmon_stat_key_copy(const struct resmon_stat_key *key, size_t size)
 		return tab->seqnn;					\
 	}
 
+#define RESMON_STAT_NROWS_FN(name)		\
+	unsigned int				\
+	resmon_stat_ ## name ## _nrows(const struct resmon_stat *stat)	\
+	{								\
+		const struct resmon_table *tab = &(stat->name);		\
+									\
+		return resmon_table_nrows(tab);				\
+	}
+
 struct resmon_stat_ralue_key {
 	struct resmon_stat_key base;
 	enum mlxsw_reg_ralxx_protocol protocol;
@@ -177,6 +219,7 @@ resmon_stat_ralue_key(enum mlxsw_reg_ralxx_protocol protocol,
 RESMON_STAT_KEY_HASH_FN(resmon_stat_ralue_hash, struct resmon_stat_ralue_key);
 RESMON_STAT_KEY_EQ_FN(resmon_stat_ralue_eq, struct resmon_stat_ralue_key);
 RESMON_STAT_SEQNN_FN(ralue);
+RESMON_STAT_NROWS_FN(ralue);
 
 struct resmon_stat_ptar_key {
 	struct resmon_stat_key base;
@@ -561,6 +604,29 @@ int resmon_stat_ralue_delete(struct resmon_stat *stat,
 				      dip);
 
 	return resmon_table_delete(stat, &stat->ralue, &key.base);
+}
+
+int resmon_stat_ralue_next_row(struct resmon_stat *stat,
+			       enum mlxsw_reg_ralxx_protocol *protocol,
+			       uint8_t *prefix_len,
+			       uint16_t *virtual_router,
+			       struct resmon_stat_dip *dip,
+			       struct resmon_stat_kvd_alloc *kvd_alloc)
+{
+	const struct lh_entry *e = resmon_table_next(&stat->ralue);
+
+	if (e == NULL)
+		return -1;
+
+	const struct resmon_stat_kvd_alloc *kvda = lh_entry_v(e);
+	const struct resmon_stat_ralue_key *key = lh_entry_k(e);
+
+	*protocol = key->protocol;
+	*prefix_len = key->prefix_len;
+	*virtual_router = key->virtual_router;
+	*dip = key->dip;
+	*kvd_alloc = *kvda;
+	return 0;
 }
 
 int resmon_stat_ptar_alloc(struct resmon_stat *stat,
