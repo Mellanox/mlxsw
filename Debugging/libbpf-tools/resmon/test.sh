@@ -488,6 +488,23 @@ test_svfa_reg_tlv "32" "01" "00" RQ_VID2FID -1
 
 test_svfa_reg_tlv "00" "02" "00" VNI2FID -1
 
+################# RIPS - add IPv6 address ##################
+reg_id=8021
+
+type_len="180c0000"
+resv="00"
+index="000010"
+ipv6="20010db8000300000000000000000001"
+
+reg_tlv=$type_len$resv$index$ipv6
+
+resmon_stats_test \
+	$(op_tlv_get $reg_id)$string_tlv$reg_tlv$end_tlv IPV6ADDR 1
+
+################ IEDR - delete IPv6 address ################
+
+test_iedr_reg_tlv "28" $index IPV6ADDR -1
+
 ####################### Stop resmon #######################
 $RESMON stop
 
