@@ -284,17 +284,26 @@ resmon_stats_test \
 test_iedr_reg_tlv()
 {
 	local type=$1; shift
-	local index=$1; shift
+	local index_start=$1; shift
 	local gauge_name=$1; shift
 	local num_entries=$1; shift
 
-
 	local reg_id=3804
-	local prefix="1885000000000001000000000000000000000000"
-	local size="00000100"
-	local empty_records=$(printf '%*s' 1008 | tr ' ' "0")
+	local type_len="18850000"
+	local resv1="000000"
+	local num_rec="01"
+	local resv2="000000000000000000000000"
+	local prefix=$type_len$resv1$num_rec$resv2
 
-	reg_tlv=$prefix$type$size$index$empty_records
+	# Record 1
+	local resv3="000"
+	local size="001"
+	local resv4="00"
+	local record_1=$type$resv3$size$resv4$index_start
+
+	local empty_records=$(printf %01008d)
+
+	reg_tlv=$prefix$record_1$empty_records
 
 	resmon_stats_test \
 		$(op_tlv_get $reg_id)$string_tlv$reg_tlv$end_tlv $gauge_name $num_entries
