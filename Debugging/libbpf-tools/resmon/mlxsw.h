@@ -193,3 +193,5 @@ enum mlxsw_reg_svfa_mt {
 	MLXSW_REG_SVFA_MT_PORT_VID_TO_FID,
 	MLXSW_REG_SVFA_MT_VNI_TO_FID,
 };
+
+#define MLXSW_REG_RIPS_ID 0x8021

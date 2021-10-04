@@ -1321,6 +1321,7 @@ static const struct resmon_d_resgrp_info resmon_d_resgrp_info[] = {
 		{{
 			[RESMON_RSRC_ACTSET] = true,
 			[RESMON_RSRC_ADJTAB] = true,
+			[RESMON_RSRC_IPV6ADDR] = true,
 		}}
 	},
 };

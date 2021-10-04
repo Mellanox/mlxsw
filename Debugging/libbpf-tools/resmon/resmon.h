@@ -171,6 +171,7 @@ int resmon_c_dump(int argc, char **argv);
 	X(VID2FID, "VID to FID Table")			\
 	X(RQ_VID2FID, "RQ, VID to FID Table")		\
 	X(VNI2FID, "VNI to FID Table")			\
+	X(IPV6ADDR, "IPv6 address")                  	\
 	/**/
 
 enum resmon_resource {
