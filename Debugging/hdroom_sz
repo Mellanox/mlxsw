@@ -1,0 +1,170 @@
+#!/usr/bin/python
+from collections import namedtuple
+import argparse
+
+Gearbox = namedtuple("Gearbox", ["ns"])
+gearboxes = {
+    "amos": Gearbox(ns=155),
+    "abir": Gearbox(ns=120),
+    "inphi": Gearbox(ns=400),
+    "none": Gearbox(ns=0),
+}
+
+ASIC = namedtuple("ASIC", ["cell_size_B", "tile_ns"])
+asics = {
+    "spc1": ASIC(cell_size_B=96,  tile_ns=0),
+    "spc2": ASIC(cell_size_B=144, tile_ns=0),
+    "spc3": ASIC(cell_size_B=144, tile_ns=0),
+    "spc4": ASIC(cell_size_B=192, tile_ns=120),
+}
+
+# peer_resp seems to be in units of 512 bit times
+LineRate = namedtuple("LineRate",
+                      ["Gbps", "peer_resp", "xon_size_KiB", "hysteresis"])
+linerates = {
+    "400G": LineRate(Gbps=400, peer_resp=905, xon_size_KiB=38,
+                     hysteresis=True),
+    "200G": LineRate(Gbps=200, peer_resp=453, xon_size_KiB=19,
+                     hysteresis=False),
+    "100G": LineRate(Gbps=100, peer_resp=394, xon_size_KiB=19,
+                     hysteresis=False),
+    "50G": LineRate(Gbps=50,  peer_resp=147, xon_size_KiB=19,
+                    hysteresis=False),
+    "40G": LineRate(Gbps=40,  peer_resp=118, xon_size_KiB=19,
+                    hysteresis=False),
+    "25G": LineRate(Gbps=25,  peer_resp=80,  xon_size_KiB=19,
+                    hysteresis=False),
+    "10G": LineRate(Gbps=10,  peer_resp=67,  xon_size_KiB=19,
+                    hysteresis=False),
+}
+
+def parse_percent(s):
+    if s[-1] == '%':
+        s = s[:-1]
+
+    n = int(s)
+    if n < 0 or n > 100:
+        raise argparse.ArgumentTypeError("Expected value 0..100, got %d" % n)
+    return n
+
+parser = argparse.ArgumentParser(description='Lossless headroom size calculator')
+parser.add_argument('--asic', choices=asics.keys(), required=True,
+                    help="ASIC type")
+parser.add_argument('--linerate', choices=linerates.keys(), required=True,
+                    help="Line rate")
+parser.add_argument('--mtu', type=int, dest="MTU_B", required=True,
+                    help="MTU")
+parser.add_argument('--cable-length', type=float, dest="cable_m", required=True,
+                    help="Cable length in meters")
+parser.add_argument('--gearbox', choices=gearboxes.keys(), default="none",
+                    help="Gearbox type")
+parser.add_argument('--no-gearbox',
+                    action='store_const', const='none', dest="gearbox",
+                    help="The machine has no gearbox (default)")
+parser.add_argument('--macsec', action='store_true', dest="use_macsec",
+                    help="MACsec is configured on the interface")
+parser.add_argument('--no-macsec', action='store_false', dest="use_macsec",
+                    help="MACsec is not configured on the interface (default)")
+parser.add_argument('--mac-phy-delay', type=int, default="0", dest="mac_phy_B",
+                    help="Amount of traffic in the MAC/PHY layer, in bytes")
+parser.add_argument('--peer-mtu', type=int, dest="peer_MTU_B",
+                    help="Peer MTU. Defaults to the local MTU")
+parser.add_argument('--waste-prob', type=parse_percent, default="100",
+                    dest="waste_prob_pct",
+                    help="Likelihood of arrival of a packet with a size that maximally wastes the ASIC memory, in percent")
+
+args = parser.parse_args()
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+asic = asics[args.asic]
+linerate = linerates[args.linerate]
+gearbox = gearboxes[args.gearbox]
+MTU_KiB = args.MTU_B / 1024
+cable_m = args.cable_m
+use_macsec = args.use_macsec
+mac_phy_delay_KiB = args.mac_phy_B / 1024
+peer_MTU_KiB = MTU_KiB if args.peer_MTU_B is None else (args.peer_MTU_B / 1024)
+
+# Spectrum allocates memory in cells. Cells are indivisible, each cell
+# contains data of at most one packet. Some memory is therefore wasted. On
+# systems with small cell size, a packet with the size of (cell size + 1)
+# will consume almost twice as much memory as its size suggest. On systems
+# with a large cell size, a 64-byte packet can consume memory many
+# multiples of its size.
+#
+# max_waste_prob is the probability that a maximally-wasting packet
+# arrives.
+#
+max_waste_prob = args.waste_prob_pct / 100
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+def b_to_KiB(n):
+    return n / 8 / 1024
+
+# IEEE 802.3 par 44.3 "Delay constraints"
+signal_speed_mps = 3e8 * 0.66 # speed of light in vacuum * 0.66
+cable_ns = cable_m / signal_speed_mps * 1e9
+cable_KiB = b_to_KiB(cable_ns * linerate.Gbps)
+
+# This is the amount of traffic that is still sent after the peer receives
+# the PAUSE / PFC frame.
+#
+peer_response_KiB = b_to_KiB(linerate.peer_resp * 512)
+
+gearbox_KiB = b_to_KiB(gearbox.ns * linerate.Gbps)
+tile_KB = b_to_KiB(asic.tile_ns * linerate.Gbps)
+
+MACsec_ns = 120 if use_macsec else 0
+MACsec_KB = b_to_KiB(linerate.Gbps * MACsec_ns)
+
+# Worst-case waste factor. See max_waste_prob for explanation.
+#
+max_waste_factor = max([(2 * asic.cell_size_B) / (asic.cell_size_B + 1),
+                        asic.cell_size_B / 64])
+
+# The actual waste factor is determined on a sliding scale from 1.0 (no
+# waste) to max_waste_factor, depending on the probability that a
+# maximally-wasting packet appears (as determined by max_waste_prob).
+#
+waste_factor = 1.0 * (1 - max_waste_prob) + max_waste_factor * max_waste_prob
+
+# At the point in time that the ASIC determines that a PAUSE / PFC frame is
+# to be sent, some amount of traffic that has already been sent by the peer
+# is yet to arrive; more traffic will be sent by the peer before the PAUSE
+# / PFC frame arrives at the peer. This is called propagation delay and is
+# composed as follows:
+#
+# - traffic already on the cable
+# - traffic sent by the peer during latencies in MAC / PHY, gearbox,
+#   MACsec, and ASIC tiles
+# - traffic sent by the peer while the local switch waits to finish its own
+#   transmission of an MTU-sized packet so that it can send the PAUSE / PFC
+#   frame
+# - traffic sent by the peer during the time that the PAUSE / PFC frame
+#   travels through the cable
+# - traffic sent by the peer after it has received the PAUSE / PFC frame,
+#   but before it reacts to it
+#
+prop_delay_KiB = (2 * cable_KiB + 2 * gearbox_KiB + 2 * MACsec_KB + tile_KB
+                  + mac_phy_delay_KiB + MTU_KiB + peer_response_KiB)
+
+# - an extra peer-MTU-sized packet that the peer has already started
+#   sending. Since this is not a maximally-wasting packet, this size is not
+#   multiplied by waste_factor.
+#
+buffer_size_KiB = peer_MTU_KiB + prop_delay_KiB * waste_factor
+
+xon_thresh_KiB = linerate.xon_size_KiB
+xoff_thresh_KiB = xon_thresh_KiB + (MTU_KiB if linerate.hysteresis else 0)
+headroom_size_KiB = xoff_thresh_KiB + buffer_size_KiB
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+def show(what, value):
+    print("%s\t%s" % (what, value))
+
+show("xon_thresh", int(xon_thresh_KiB * 1024))
+show("xoff_thresh", int(xoff_thresh_KiB * 1024))
+show("headroom_size", int(headroom_size_KiB * 1024))
