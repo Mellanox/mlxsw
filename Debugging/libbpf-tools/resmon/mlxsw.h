@@ -195,3 +195,10 @@ enum mlxsw_reg_svfa_mt {
 };
 
 #define MLXSW_REG_RIPS_ID 0x8021
+
+enum mlxsw_reg_sfmr_op {
+	MLXSW_REG_SFMR_OP_CREATE_FID,
+	MLXSW_REG_SFMR_OP_DESTROY_FID,
+};
+
+#define MLXSW_REG_SFMR_ID 0x201F

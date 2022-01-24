@@ -171,6 +171,7 @@ int resmon_c_dump(int argc, char **argv);
 	X(VID2FID, "VID to FID Table")			\
 	X(RQ_VID2FID, "RQ, VID to FID Table")		\
 	X(VNI2FID, "VNI to FID Table")			\
+	X(FID2FID, "FID to FID Table")			\
 	X(IPV6ADDR, "IPv6 address")                  	\
 	/**/
 
@@ -351,6 +352,14 @@ int resmon_stat_svfa_next_row(struct resmon_stat *stat,
 			      enum mlxsw_reg_svfa_mt *mapping_table,
 			      uint16_t *local_port,
 			      uint32_t *vid_vni,
+			      struct resmon_stat_kvd_alloc *kvd_alloc);
+
+int resmon_stat_sfmr_update(struct resmon_stat *stat, uint16_t fid,
+			    struct resmon_stat_kvd_alloc kvd_alloc);
+int resmon_stat_sfmr_delete(struct resmon_stat *stat, uint16_t fid);
+unsigned int resmon_stat_sfmr_seqnn(const struct resmon_stat *stat);
+unsigned int resmon_stat_sfmr_nrows(const struct resmon_stat *stat);
+int resmon_stat_sfmr_next_row(struct resmon_stat *stat, uint16_t *fid,
 			      struct resmon_stat_kvd_alloc *kvd_alloc);
 
 /* resmon-dl.c */

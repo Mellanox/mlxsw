@@ -134,6 +134,7 @@ int BPF_PROG(handle__devlink_hwmsg,
 	case 0x2013: /* MLXSW_REG_SFDF_ID */
 	case 0x201C: /* MLXSW_REG_SVFA_ID */
 	case 0x8021: /* MLXSW_REG_RIPS_ID */
+	case 0x201F: /* MLXSW_REG_SFMR_ID */
 		return push_to_ringbuf(buf, len);
 	};
 	return 0;

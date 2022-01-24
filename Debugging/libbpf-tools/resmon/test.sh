@@ -505,6 +505,30 @@ resmon_stats_test \
 
 test_iedr_reg_tlv "28" $index IPV6ADDR -1
 
+############### SFMR - add FID to FID entry ################
+
+test_sfmr_reg_tlv()
+{
+	local op=$1; shift
+	local fid=$1; shift
+	local num_entries=$1; shift
+
+	local reg_id="201f"
+	local reg_tlv="18020000"
+	local resv="00"
+
+	reg_tlv=$reg_tlv$op$resv$fid
+
+	resmon_stats_test \
+		$(op_tlv_get $reg_id)$string_tlv$reg_tlv$end_tlv FID2FID $num_entries
+}
+
+test_sfmr_reg_tlv "00" "1234" 1
+
+############## SFMR - delete FID to FID entry  ##############
+
+test_sfmr_reg_tlv "01" "1234" -1
+
 ####################### Stop resmon #######################
 $RESMON stop
 

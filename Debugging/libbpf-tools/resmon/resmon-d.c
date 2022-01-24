@@ -345,6 +345,8 @@ static struct json_object *resmon_d_dump_sfd_next(struct resmon_stat *stat,
 						  char **error);
 static struct json_object *resmon_d_dump_svfa_next(struct resmon_stat *stat,
 						   char **error);
+static struct json_object *resmon_d_dump_sfmr_next(struct resmon_stat *stat,
+						   char **error);
 
 static struct resmon_d_table_info resmon_d_tables[] = {
 	{
@@ -388,6 +390,12 @@ static struct resmon_d_table_info resmon_d_tables[] = {
 		.seqnn = resmon_stat_svfa_seqnn,
 		.nrows = resmon_stat_svfa_nrows,
 		.dump_next = resmon_d_dump_svfa_next,
+	},
+	{
+		.name = "sfmr",
+		.seqnn = resmon_stat_sfmr_seqnn,
+		.nrows = resmon_stat_sfmr_nrows,
+		.dump_next = resmon_d_dump_sfmr_next,
 	},
 };
 
@@ -1000,6 +1008,38 @@ static struct json_object *resmon_d_dump_svfa_next(struct resmon_stat *stat,
 
 err_form_row:
 	resmon_fmterr(error, "Couldn't form svfa row: %m");
+	json_object_put(row);
+	return NULL;
+}
+
+static struct json_object *resmon_d_dump_sfmr_next(struct resmon_stat *stat,
+						   char **error)
+{
+	struct json_object *value; /* Observer pointer. */
+	struct json_object *key;   /* Observer pointer. */
+	struct json_object *row;   /* Owner of key and value. */
+	struct resmon_stat_kvd_alloc kvd_alloc;
+	uint16_t fid;
+	int err;
+
+	err = resmon_d_dump_row_alloc(&key, &value, &row, error);
+	if (err != 0)
+		return NULL;
+
+	err = resmon_stat_sfmr_next_row(stat, &fid, &kvd_alloc);
+	if (err != 0) {
+		*error = NULL;
+		return NULL;
+	}
+
+	err = resmon_jrpc_object_add_int(key, "fid", fid);
+	if (err != 0)
+		goto err_form_row;
+
+	return row;
+
+err_form_row:
+	resmon_fmterr(error, "Couldn't form sfmr row: %m");
 	json_object_put(row);
 	return NULL;
 }

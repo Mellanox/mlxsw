@@ -20,6 +20,7 @@
 	X(SFDF)				\
 	X(SVFA)				\
 	X(RIPS)				\
+	X(SFMR)				\
 	/**/
 
 #define RESMON_REG_REGISTER_AS_ENUM(NAME)	\
@@ -55,6 +56,7 @@ enum {
 #define RESMON_REG_VNI2FID_REGMASK	RESMON_REG_REGMASK_SVFA
 #define RESMON_REG_IPV6ADDR_REGMASK	(RESMON_REG_REGMASK_RIPS |	\
 					 RESMON_REG_REGMASK_IEDR)
+#define RESMON_REG_FID2FID_REGMASK	RESMON_REG_REGMASK_SFMR
 
 #define RESMON_REG_RSRC_AS_REGMASK(NAME, DESCRIPTION)		\
 	[RESMON_RSRC_ ## NAME] = RESMON_REG_ ## NAME ## _REGMASK,
@@ -467,6 +469,17 @@ struct resmon_reg_rips {
 #define resmon_reg_rips_index(reg) ((uint32_be_toh((reg)->__index) & 0xffffff))
 
 	uint8_t __dip6[16];
+};
+
+struct resmon_reg_sfmr {
+	uint8_t __op;
+
+#define resmon_reg_sfmr_op(reg) ((reg)->__op & 0x0f)
+
+	uint8_t resv1;
+	uint16_be_t __fid;
+
+#define resmon_reg_sfmr_fid(reg) uint16_be_toh((reg)->__fid)
 };
 
 static struct resmon_reg_emad_tl
@@ -1060,6 +1073,37 @@ oob:
 	return -1;
 }
 
+static int resmon_reg_handle_sfmr(struct resmon_stat *stat,
+				  const uint8_t *payload, size_t payload_len,
+				  char **error)
+{
+	struct resmon_stat_kvd_alloc kvda = {
+		.slots = 1,
+		.resource = RESMON_RSRC_FID2FID,
+	};
+	const struct resmon_reg_sfmr *reg;
+	uint16_t fid;
+	int rc;
+
+	reg = RESMON_REG_READ(sizeof(*reg), payload, payload_len);
+	fid = resmon_reg_sfmr_fid(reg);
+
+	switch (resmon_reg_sfmr_op(reg)) {
+	case MLXSW_REG_SFMR_OP_CREATE_FID:
+		rc = resmon_stat_sfmr_update(stat, fid, kvda);
+		return resmon_reg_insert_rc(rc, error);
+	case MLXSW_REG_SFMR_OP_DESTROY_FID:
+		rc = resmon_stat_sfmr_delete(stat, fid);
+		return resmon_reg_delete_rc(rc, error);
+	default:
+		return 0;
+	};
+
+oob:
+	resmon_reg_err_payload_truncated(error);
+	return -1;
+}
+
 static unsigned int resmon_reg_register_as_regmask(uint16_t reg_id)
 {
 #define RESMON_REG_REGISTER_AS_REGMASK_CASE(NAME)		\
@@ -1140,6 +1184,8 @@ int resmon_reg_process_emad(struct resmon_reg *rreg,
 		return resmon_reg_handle_svfa(stat, buf, len, error);
 	case MLXSW_REG_RIPS_ID:
 		return resmon_reg_handle_rips(stat, buf, len, error);
+	case MLXSW_REG_SFMR_ID:
+		return resmon_reg_handle_sfmr(stat, buf, len, error);
 	}
 
 	resmon_fmterr(error, "EMAD malformed: Unknown register");

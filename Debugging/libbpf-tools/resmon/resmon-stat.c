@@ -24,6 +24,7 @@ struct resmon_stat {
 	struct resmon_table rauht;
 	struct resmon_table sfd; /* resmon_stat_sfd_key -> resmon_stat_sfd_val */
 	struct resmon_table svfa;
+	struct resmon_table sfmr;
 };
 
 static void resmon_stat_entry_free(struct lh_entry *e)
@@ -365,6 +366,23 @@ RESMON_STAT_KEY_EQ_FN(resmon_stat_svfa_eq, struct resmon_stat_svfa_key);
 RESMON_STAT_SEQNN_FN(svfa);
 RESMON_STAT_NROWS_FN(svfa);
 
+struct resmon_stat_sfmr_key {
+	struct resmon_stat_key base;
+	uint16_t fid;
+};
+
+static struct resmon_stat_sfmr_key resmon_stat_sfmr_key(uint16_t fid)
+{
+	return (struct resmon_stat_sfmr_key) {
+		.fid = fid,
+	};
+}
+
+RESMON_STAT_KEY_HASH_FN(resmon_stat_sfmr_hash, struct resmon_stat_sfmr_key);
+RESMON_STAT_KEY_EQ_FN(resmon_stat_sfmr_eq, struct resmon_stat_sfmr_key);
+RESMON_STAT_SEQNN_FN(sfmr);
+RESMON_STAT_NROWS_FN(sfmr);
+
 static struct resmon_stat_kvd_alloc *
 resmon_stat_kvd_alloc_copy(struct resmon_stat_kvd_alloc kvd_alloc)
 {
@@ -415,8 +433,14 @@ struct resmon_stat *resmon_stat_create(void)
 	if (err != 0)
 		goto free_sfd_tab;
 
+	err = RESMON_TABLE_INIT(stat, sfmr);
+	if (err != 0)
+		goto free_svfa_tab;
+
 	return stat;
 
+free_svfa_tab:
+	RESMON_TABLE_FINI(stat, svfa);
 free_sfd_tab:
 	RESMON_TABLE_FINI(stat, sfd);
 free_rauht_tab:
@@ -436,6 +460,7 @@ free_stat:
 
 void resmon_stat_destroy(struct resmon_stat *stat)
 {
+	RESMON_TABLE_FINI(stat, sfmr);
 	RESMON_TABLE_FINI(stat, svfa);
 	RESMON_TABLE_FINI(stat, sfd);
 	RESMON_TABLE_FINI(stat, rauht);
@@ -1107,6 +1132,40 @@ int resmon_stat_svfa_next_row(struct resmon_stat *stat,
 	*mapping_table = key->mapping_table;
 	*local_port = key->local_port;
 	*vid_vni = key->vid_vni;
+	*kvd_alloc = *kvda;
+	return 0;
+}
+
+int resmon_stat_sfmr_update(struct resmon_stat *stat, uint16_t fid,
+			    struct resmon_stat_kvd_alloc kvd_alloc)
+{
+	struct resmon_stat_sfmr_key key;
+
+	key = resmon_stat_sfmr_key(fid);
+	return resmon_table_update(stat, &stat->sfmr, &key.base, sizeof(key),
+				   kvd_alloc);
+}
+
+int resmon_stat_sfmr_delete(struct resmon_stat *stat, uint16_t fid)
+{
+	struct resmon_stat_sfmr_key key;
+
+	key = resmon_stat_sfmr_key(fid);
+	return resmon_table_delete(stat, &stat->sfmr, &key.base);
+}
+
+int resmon_stat_sfmr_next_row(struct resmon_stat *stat, uint16_t *fid,
+			      struct resmon_stat_kvd_alloc *kvd_alloc)
+{
+	const struct lh_entry *e = resmon_table_next(&stat->sfmr);
+
+	if (e == NULL)
+		return -1;
+
+	const struct resmon_stat_kvd_alloc *kvda = lh_entry_v(e);
+	const struct resmon_stat_sfmr_key *key = lh_entry_k(e);
+
+	*fid = key->fid;
 	*kvd_alloc = *kvda;
 	return 0;
 }
