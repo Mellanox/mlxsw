@@ -20,7 +20,7 @@ static int resmon_help(void)
 	     "Usage: resmon [OPTIONS] { COMMAND | help }\n"
 	     "where  OPTIONS := [ -h | --help | -q | --quiet | -v | --verbose |\n"
 	     "			  -V | --version | --sockdir <DIR> | --json ]\n"
-	     "	     COMMAND := { start | stop | ping | emad | stats }\n"
+	     "	     COMMAND := { start | stop | ping | emad | stats | dump }\n"
 	     );
 	return 0;
 }
