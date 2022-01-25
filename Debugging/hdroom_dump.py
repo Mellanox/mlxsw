@@ -8,8 +8,8 @@ mlxsw_sp = MlxswSp.find()
 dump = {}
 dump_ports = {}
 dump["ports"] = dump_ports
-dump["max_headroom_cells"] = mlxsw_sp.sb.max_headroom_cells.value_();
-dump["cell_size"] = mlxsw_sp.sb.cell_size.value_();
+dump["max_headroom_cells"] = mlxsw_sp.sb.max_headroom_cells.value_()
+dump["cell_size"] = mlxsw_sp.sb.cell_size.value_()
 for mlxsw_sp_port in mlxsw_sp.ports():
     hdroom = mlxsw_sp_port.hdroom
     if hdroom.value_() == 0:
