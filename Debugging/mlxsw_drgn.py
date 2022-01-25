@@ -43,14 +43,17 @@ class MlxswSp:
 
     @staticmethod
     def find():
-        devlink_list = prog['devlink_list'].address_of_()
-        mlxsw_devlink_ops = prog['mlxsw_devlink_ops'].address_of_()
-        for devlink in helpers.list_for_each_entry('struct devlink',
-                                                   devlink_list, 'list'):
-            if devlink.ops == mlxsw_devlink_ops:
-                mlxsw_core = drgn.reinterpret(prog.type("struct mlxsw_core"),
-                                            devlink.priv)
+        thermal_tz_list = prog['thermal_tz_list'].address_of_()
+        mlxsw_thermal_ops = prog['mlxsw_thermal_ops'].address_of_()
+        for thermal_zone_device in helpers.list_for_each_entry('struct thermal_zone_device',
+                                                               thermal_tz_list,
+                                                               'node'):
+            if thermal_zone_device.ops == mlxsw_thermal_ops:
+                thermal = drgn.reinterpret(prog.type("struct mlxsw_thermal *"),
+                                           thermal_zone_device.devdata)
+                mlxsw_core = drgn.reinterpret(prog.type("struct mlxsw_core *"),
+                                              thermal.core)
                 mlxsw_sp = drgn.reinterpret(prog.type("struct mlxsw_sp"),
                                             mlxsw_core.driver_priv)
                 return MlxswSp(mlxsw_sp)
-        raise RuntimeError("mlxsw devlink instance not found")
+        raise RuntimeError("mlxsw thermal zone instance not found")
