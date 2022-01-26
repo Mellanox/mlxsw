@@ -99,7 +99,7 @@ class ResmonCollector(object):
             with bind_socket(sock):
                 sock.sendto(b"""{ "jsonrpc": "2.0", "id": 1, "method": "stats" }""",
                                 "%s/resmon.ctl" % self.args['resmon_sockdir'])
-                data = sock.recv(1024)
+                data = sock.recv(2048)
                 return json.loads(data)
 
     def update_resmon_stats(self, gauge_val, gauge_cap):
