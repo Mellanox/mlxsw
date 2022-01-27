@@ -1,0 +1,176 @@
+NAME
+
+        fid_dump - Dump mlxsw filtering identifier (FID) configuration
+
+SYNOPSIS:
+
+        fid_dump
+
+DESCRIPTION:
+
+        fid_dump is a tool written on top of drgn, for dumping internal
+        structures of mlxsw driver related to FID management. That way it is
+        possible to find out how FIDs are configured in the ASIC.
+
+OUTPUT
+
+        As an output, fid_dump emits a JSON object with the following
+        attributes:
+
+        .ports.<port-name>.local_port
+            The local port number of the port.
+
+        .ports.<port-name>.virtual
+            Whether the port is in virtual mode or not. When in virtual
+            mode, ingress FID classification is performed based on
+            {Port, VID}. Otherwise, based on VID alone. Virtual mode is
+            less scalable as it requires more FID classification
+            entries to be present in the ASIC.
+
+        .fid_families.<family-name>
+            The FID family. See kernel commit a11074872545 ("mlxsw:
+            spectrum: Implement common FID core") for more details.
+
+        .fid_families.<family-name>.start_index
+            Start index (inclusive) for FID allocation from given FID
+            family.
+
+        .fid_families.<family-name>.end_index
+            End index (inclusive) for FID allocation for given FID
+            family.
+
+        .fid_families.<family-name>.rif_type
+            The type of router interface (RIF) used for RIFs constructed
+            on top of FIDs from the given FID family.
+
+        .fid_families.<family-name>.fids.<fid-number>.vid
+            VLAN identifier (VID) mapped to the FID. Only valid for
+            "8021Q" FIDs.
+
+        .fid_families.<family-name>.fids.<fid-number>.br_ifindex
+            VLAN-unaware bridge interface index mapped to the FID. Only
+            valid for "8021D" FIDs.
+
+        .fid_families.<family-name>.fids.<fid-number>.br_ifname
+            VLAN-unaware bridge interface name mapped to the FID. Only
+            valid for "8021D" FIDs.
+
+        .fid_families.<family-name>.fids.<fid-number>.ref_count
+            FID reference count.
+
+        .fid_families.<family-name>.fids.<fid-number>.rif.index
+            Index of the RIF constructed on top of the FID.
+
+        .fid_families.<family-name>.fids.<fid-number>.rif.ifindex
+            Interface index of the net device represented by the RIF.
+
+        .fid_families.<family-name>.fids.<fid-number>.rif.ifname
+            Interface name of the net device represented by the RIF.
+
+        .fid_families.<family-name>.fids.<fid-number>.vni
+            Virtual Network Identifier (VNI) mapped to the FID.
+
+        .fid_families.<family-name>.fids.<fid-number>.nve_ifindex
+            Interface index of the Network Virtualization Endpoint (NVE)
+            whose VNI is mapped to the FID.
+
+        .fid_families.<family-name>.fids.<fid-number>.nve_ifname
+            Interface name of the Network Virtualization Endpoint (NVE)
+            whose VNI is mapped to the FID.
+
+        .fid_families.<family-name>.fids.<fid-number>.nve_flood_index
+            Index to a linked list of underlay IP addresses in the KVDL
+            to which BUM packets should be replicated to. See kernel
+            commit 90ea0bb55115 ("mlxsw: spectrum: Add a new type of KVD
+            linear record") for more details.
+
+        fid_dump always outputs the complete information. Filtering and
+        querying can be done e.g. through `jq`.
+
+EXAMPLE:
+
+    # fid_dump | jq
+    {
+      "ports": {
+        "swp18": {
+          "local_port": 1,
+          "virtual": false
+        },
+        [...]
+      },
+      "fid_families": {
+        "8021Q": {
+          "start_index": 5120,
+          "end_index": 9213,
+          "rif_type": "VLAN",
+          "fids": {}
+        },
+        "8021D": {
+          "start_index": 4096,
+          "end_index": 5119,
+          "rif_type": "FID",
+          "fids": {
+            "4096": {
+              "br_ifindex": 96,
+              "br_ifname": "br0",
+              "ref_count": 3,
+              "rif": {
+                "index": 2,
+                "ifindex": 96,
+                "ifname": "br0"
+              },
+              "vni": 10,
+              "nve_ifindex": 97,
+              "nve_ifname": "vxlan0",
+              "nve_flood_index": 0
+            }
+          }
+        },
+        "RFID": {
+          "start_index": 15360,
+          "end_index": 16383,
+          "rif_type": "SUBPORT",
+          "fids": {
+            "15364": {
+              "ref_count": 2,
+              "rif": {
+                "index": 4,
+                "ifindex": 72,
+                "ifname": "swp4"
+              }
+            },
+            "15363": {
+              "ref_count": 2,
+              "rif": {
+                "index": 3,
+                "ifindex": 71,
+                "ifname": "swp3"
+              }
+            },
+            "15361": {
+              "ref_count": 2,
+              "rif": {
+                "index": 1,
+                "ifindex": 73,
+                "ifname": "swp1"
+              }
+            }
+          }
+        },
+        "DUMMY": {
+          "start_index": 4095,
+          "end_index": 4095,
+          "rif_type": "SUBPORT",
+          "fids": {
+            "4095": {
+              "ref_count": 1
+            }
+          }
+        }
+      }
+    }
+
+SEE ALSO:
+
+    https://github.com/Mellanox/mlxsw/wiki
+    https://drgn.readthedocs.io

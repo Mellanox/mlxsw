@@ -58,6 +58,12 @@ class MlxswSp:
                 return MlxswSp(mlxsw_sp)
         raise RuntimeError("mlxsw thermal zone instance not found")
 
+    def netns(self):
+        mlxsw_core = self._mlxsw_sp.core
+        devlink = drgn.container_of(mlxsw_core, "struct devlink", "priv")
+
+        return devlink._net.net
+
 def enum_name(in_enum):
     enum_n, = list(enum.name
                    for enum in in_enum.type_.enumerators
