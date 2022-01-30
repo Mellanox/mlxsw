@@ -17,6 +17,11 @@ installed:
 
 - [pandoc](https://pandoc.org/)
 
+To run the Prometheus exporter described below, make sure the following
+is installed:
+
+- [prometheus-client](https://github.com/prometheus/client_python)
+
 On top of that, some requirements arise from the fact that `resmon` uses a BPF
 component. These requirements are covered in the [top-level
 README.md](../README.md).
