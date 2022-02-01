@@ -21,12 +21,7 @@ for mlxsw_sp_port in mlxsw_sp.ports():
     dump_port["max_mtu"] = mlxsw_sp_port.max_mtu.value_()
     dump_port["max_speed"] = mlxsw_sp_port.max_speed.value_()
 
-    mode = hdroom.mode
-    mode_t = mode.type_
-    mode_n, = list(enum.name
-                   for enum in mode_t.enumerators
-                   if enum.value == mode.value_())
-    mode_n = mode_n.split("_", 4)[-1]
+    mode_n = enum_name(hdroom.mode)
 
     dump_port["mode"] = mode_n
     dump_port["mtu"] = hdroom.mtu.value_()

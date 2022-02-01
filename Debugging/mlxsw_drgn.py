@@ -57,3 +57,10 @@ class MlxswSp:
                                             mlxsw_core.driver_priv)
                 return MlxswSp(mlxsw_sp)
         raise RuntimeError("mlxsw thermal zone instance not found")
+
+def enum_name(in_enum):
+    enum_n, = list(enum.name
+                   for enum in in_enum.type_.enumerators
+                   if enum.value == in_enum.value_())
+
+    return enum_n.split("_")[-1]
