@@ -63,8 +63,11 @@ static int push_to_ringbuf(const u8 *buf, size_t len)
 	else
 		space = bpf_ringbuf_reserve(&ringbuf, 256, 0);
 
-	if (!space)
+	if (!space) {
+		bpf_printk("Unable to reserve %lu bytes for an EMAD on ring buffer\n",
+			   len);
 		return 0;
+	}
 
 	bpf_core_read(space, len, buf);
 	bpf_ringbuf_submit(space, 0);
