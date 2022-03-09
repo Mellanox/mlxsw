@@ -44,7 +44,7 @@ static struct emad_tlv_head emad_tlv_decode_header(__be16 type_len_be)
 
 struct {
 	__uint(type, BPF_MAP_TYPE_RINGBUF);
-	__uint(max_entries, 256 * 1024 /* 256 KB */);
+	__uint(max_entries, 2 * 1024 * 1024 /* 2 MB */);
 } ringbuf SEC(".maps");
 
 static int push_to_ringbuf(const u8 *buf, size_t len)
