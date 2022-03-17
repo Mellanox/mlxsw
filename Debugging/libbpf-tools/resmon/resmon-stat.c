@@ -37,7 +37,7 @@ static void resmon_stat_entry_free(struct lh_entry *e)
 static int resmon_table_init(struct resmon_table *tab,
 			     lh_hash_fn *hash_fn, lh_equal_fn *equal_fn)
 {
-	tab->lh = lh_table_new(1, resmon_stat_entry_free, hash_fn, equal_fn);
+	tab->lh = lh_table_new(1000, resmon_stat_entry_free, hash_fn, equal_fn);
 	if (tab->lh == NULL)
 		return -1;
 
