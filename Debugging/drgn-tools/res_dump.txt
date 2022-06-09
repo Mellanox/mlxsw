@@ -1,0 +1,56 @@
+NAME
+
+        res_dump - Dump device resources
+
+SYNOPSIS:
+
+        res_dump
+
+DESCRIPTION:
+
+        res_dump is a tool written on top of drgn, for dumping device
+        resources. That way it is possible to directly find out device resources
+        without relying on tools such as devlink(8) that only provide an
+        abstraction.
+
+OUTPUT
+
+        As an output, res_dump emits a JSON object with the following
+        attributes:
+
+        .<resource-name>.id
+            The identifier of the device resource.
+
+        .<resource-name>.valid
+	    Whether the resource is valid or not. Invalid resources are
+            ignored by mlxsw.
+
+        .<resource-name>.value
+            The value of the device resource, as queried from the
+            device.
+
+        res_dump always outputs the complete information. Filtering and
+        querying can be done e.g. through `jq`.
+
+EXAMPLE:
+
+    # res_dump | jq
+    {
+      "KVD_SIZE": {
+        "id": "0x1001",
+        "valid": true,
+        "value": 524288
+      },
+      [...]
+      "MAX_NVE_MC_ENTRIES_IPV6": {
+        "id": "0x2e03",
+        "valid": true,
+        "value": 4
+      }
+    }
+
+SEE ALSO:
+
+    https://github.com/Mellanox/mlxsw/wiki
+    https://drgn.readthedocs.io
+    https://man7.org/linux/man-pages/man8/devlink-resource.8.html
