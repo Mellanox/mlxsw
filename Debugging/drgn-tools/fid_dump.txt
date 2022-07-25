@@ -102,6 +102,9 @@ OUTPUT
             MID index for flooding broadcast packets, see more details
             in the description of 'flood_mid_indexes.UC'.
 
+        .fid_families.<family-name>.fids.<fid-number>.port_vid_list
+                {Port, VID} pairs which are mapped to the FID.
+
         fid_dump always outputs the complete information. Filtering and
         querying can be done e.g. through `jq`.
 
@@ -146,7 +149,17 @@ EXAMPLE:
                 "UC": 12282,
                 "MC": 13306,
                 "BC": 14330
-              }
+              },
+              "port_vid_list": [
+                {
+                  "local_port": 97,
+                  "vid": 4095
+                },
+                {
+                  "local_port": 109,
+                  "vid": 4095
+                }
+              ]
             }
           }
         },
@@ -162,7 +175,13 @@ EXAMPLE:
                 "index": 4,
                 "ifindex": 72,
                 "ifname": "swp4"
-              }
+              },
+              "port_vid_list": [
+                {
+                  "local_port": 101,
+                  "vid": 4095
+                }
+              ]
             },
             "5122": {
               "fid_offset": 0,
@@ -171,7 +190,13 @@ EXAMPLE:
                 "index": 3,
                 "ifindex": 71,
                 "ifname": "swp3"
-              }
+              },
+              "port_vid_list": [
+                {
+                  "local_port": 97,
+                  "vid": 4095
+                }
+              ]
             },
             "5121": {
               "fid_offset": 0,
@@ -180,7 +205,13 @@ EXAMPLE:
                 "index": 1,
                 "ifindex": 73,
                 "ifname": "swp1"
-              }
+              },
+              "port_vid_list": [
+                {
+                  "local_port": 105,
+                  "vid": 4095
+                }
+              ]
             }
           }
         },
@@ -191,7 +222,8 @@ EXAMPLE:
           "fids": {
             "5119": {
               "fid_offset": 0,
-              "ref_count": 1
+              "ref_count": 1,
+              "port_vid_list": []
             }
           }
         }

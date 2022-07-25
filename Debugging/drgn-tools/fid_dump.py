@@ -106,4 +106,15 @@ for family in mlxsw_sp.fid_core.fid_family_arr:
         if family_type_n == "8021Q" or family_type_n == "8021D":
             mid_indexes_dump(fid, dump_fid)
 
+        dump_port_vid_list = []
+        dump_fid["port_vid_list"] = dump_port_vid_list
+        for port_vid in \
+                helpers.list_for_each_entry("struct mlxsw_sp_fid_port_vid",
+                                            fid.port_vid_list.address_of_(),
+                                            "list"):
+                    dump_port_vid = {}
+                    dump_port_vid_list.append(dump_port_vid)
+                    dump_port_vid["local_port"] = port_vid.local_port.value_()
+                    dump_port_vid["vid"] = port_vid.vid.value_()
+
 sys.stdout.write(json.dumps(dump))
