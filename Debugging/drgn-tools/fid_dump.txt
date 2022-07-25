@@ -100,17 +100,17 @@ EXAMPLE:
       },
       "fid_families": {
         "8021Q": {
-          "start_index": 5120,
-          "end_index": 9213,
+          "start_index": 1,
+          "end_index": 4094,
           "rif_type": "VLAN",
           "fids": {}
         },
         "8021D": {
-          "start_index": 4096,
-          "end_index": 5119,
+          "start_index": 4095,
+          "end_index": 5118,
           "rif_type": "FID",
           "fids": {
-            "4096": {
+            "4095": {
               "br_ifindex": 96,
               "br_ifname": "br0",
               "ref_count": 3,
@@ -127,11 +127,11 @@ EXAMPLE:
           }
         },
         "RFID": {
-          "start_index": 15360,
+          "start_index": 5120,
           "end_index": 16383,
           "rif_type": "SUBPORT",
           "fids": {
-            "15364": {
+            "5123": {
               "ref_count": 2,
               "rif": {
                 "index": 4,
@@ -139,7 +139,7 @@ EXAMPLE:
                 "ifname": "swp4"
               }
             },
-            "15363": {
+            "5122": {
               "ref_count": 2,
               "rif": {
                 "index": 3,
@@ -147,7 +147,7 @@ EXAMPLE:
                 "ifname": "swp3"
               }
             },
-            "15361": {
+            "5121": {
               "ref_count": 2,
               "rif": {
                 "index": 1,
@@ -158,11 +158,11 @@ EXAMPLE:
           }
         },
         "DUMMY": {
-          "start_index": 4095,
-          "end_index": 4095,
+          "start_index": 5119,
+          "end_index": 5119,
           "rif_type": "SUBPORT",
           "fids": {
-            "4095": {
+            "5119": {
               "ref_count": 1
             }
           }
