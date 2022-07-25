@@ -43,6 +43,9 @@ OUTPUT
             The type of router interface (RIF) used for RIFs constructed
             on top of FIDs from the given FID family.
 
+        .fid_families.<family-name>.fids.<fid-number>.fid_offset
+            FID offset, used to point into the flooding table.
+
         .fid_families.<family-name>.fids.<fid-number>.vid
             VLAN identifier (VID) mapped to the FID. Only valid for
             "8021Q" FIDs.
@@ -111,6 +114,7 @@ EXAMPLE:
           "rif_type": "FID",
           "fids": {
             "4095": {
+              "fid_offset": 0,
               "br_ifindex": 96,
               "br_ifname": "br0",
               "ref_count": 3,
@@ -132,6 +136,7 @@ EXAMPLE:
           "rif_type": "SUBPORT",
           "fids": {
             "5123": {
+              "fid_offset": 0,
               "ref_count": 2,
               "rif": {
                 "index": 4,
@@ -140,6 +145,7 @@ EXAMPLE:
               }
             },
             "5122": {
+              "fid_offset": 0,
               "ref_count": 2,
               "rif": {
                 "index": 3,
@@ -148,6 +154,7 @@ EXAMPLE:
               }
             },
             "5121": {
+              "fid_offset": 0,
               "ref_count": 2,
               "rif": {
                 "index": 1,
@@ -163,6 +170,7 @@ EXAMPLE:
           "rif_type": "SUBPORT",
           "fids": {
             "5119": {
+              "fid_offset": 0,
               "ref_count": 1
             }
           }

@@ -44,6 +44,7 @@ for family in mlxsw_sp.fid_core.fid_family_arr:
                                            "list"):
         dump_fid = {}
         dump_fids[fid.fid_index.value_()] = dump_fid
+        dump_fid["fid_offset"] = fid.fid_offset.value_()
 
         if family_type_n == "8021Q":
             fid_8021q = drgn.container_of(fid, "struct mlxsw_sp_fid_8021q",
