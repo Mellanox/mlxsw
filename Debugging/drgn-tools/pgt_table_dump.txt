@@ -1,0 +1,86 @@
+NAME
+
+        pgt_table_dump - Dump mlxsw PGT (port group table) configuration
+
+SYNOPSIS:
+
+        pgt_table_dump
+
+DESCRIPTION:
+
+        pgt_table_dump is a tool written on top of drgn, for dumping
+        an internal structure in mlxsw driver which represents the PGT
+        table in hardware. That way it is possible to find out how PGT
+        entries are configured in the ASIC.
+
+OUTPUT
+
+        As an output, pgt_table_dump emits a JSON object with the following
+        attributes:
+
+        .end_index
+            The last index (exclusive) of the PGT table, this value is read
+            from hardware and depends on ASIC generation.
+
+        .smpe_index_valid
+            Indicates if the SMPE index is valid in the PGT table.
+            In Spectrum-1, the SMPE index needs to be programmed as part of
+            the PGT entry, while it is reserved for Spectrum-2 and later
+            ASICs. See more information in kernel commit a1697d11c945d
+            ("mlxsw: Add an indication of SMPE index validity for PGT table")
+
+        .pgt_entries.<index>.mid_index
+            Multicast identifier, the index of the entry.
+
+        .pgt_entries.<index>.smpe_index
+            SMPE (switch multicast to port egress VID) index, the index
+            into the MPE table. This field appears only in case that
+            .pgt_table.smpe_index_valid is true.
+
+        .pgt_entries.<index>.ports.<netdev>.local_port
+            A local port to transmit the packet to.
+
+        pgt_table_dump always outputs the complete information. Filtering
+        and querying can be done e.g. through `jq`.
+
+EXAMPLE:
+
+    # ./pgt_table_dump | jq
+    {
+      "end_index": 31744,
+      "smpe_index_valid": true,
+      "pgt_entries": {
+        "0": {
+          "mid_index": 0,
+          "smpe_index": 1,
+          "ports": {
+            "swp14": {
+              "local_port": 50
+            },
+            "swp15": {
+              "local_port": 51
+            }
+          }
+        },
+        "4094": {
+          "mid_index": 4094,
+          "smpe_index": 1,
+          "ports": {
+            "router_port": {
+              "local_port": 66
+            },
+            "swp15": {
+              "local_port": 51
+            },
+            "swp14": {
+              "local_port": 50
+            }
+          }
+        }
+      }
+    }
+
+SEE ALSO:
+
+    https://github.com/Mellanox/mlxsw/wiki
+    https://drgn.readthedocs.io
