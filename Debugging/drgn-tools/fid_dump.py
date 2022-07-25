@@ -8,6 +8,26 @@ import sys
 mlxsw_sp = MlxswSp.find()
 dump = {}
 
+def mid_indexes_dump(fid, dump_fid):
+    dump_mid_indexes = {}
+    dump_fid["flood_mid_indexes"] = dump_mid_indexes
+
+    fid_family = fid.fid_family
+    flood_tables = fid_family.flood_tables
+
+    num_fids_in_family = fid_family.end_index.value_() - \
+                         fid_family.start_index.value_() + 1
+
+    for i in range(fid_family.nr_flood_tables.value_()):
+        flood_table = flood_tables[i]
+        packet_type_n = enum_name(flood_table.packet_type)
+
+        # Same to the calculation in mlxsw_sp_fid_flood_table_mid().
+        mid_index = fid_family.pgt_base.value_() + \
+                    num_fids_in_family * flood_table.table_index.value_() + \
+                    fid.fid_offset.value_()
+        dump_mid_indexes[packet_type_n] = mid_index
+
 dump_ports = {}
 dump["ports"] = dump_ports
 
@@ -82,5 +102,8 @@ for family in mlxsw_sp.fid_core.fid_family_arr:
 
         if fid.nve_flood_index_valid.value_():
             dump_fid["nve_flood_index"] = fid.nve_flood_index.value_()
+
+        if family_type_n == "8021Q" or family_type_n == "8021D":
+            mid_indexes_dump(fid, dump_fid)
 
 sys.stdout.write(json.dumps(dump))

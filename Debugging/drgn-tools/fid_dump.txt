@@ -87,6 +87,21 @@ OUTPUT
             commit 90ea0bb55115 ("mlxsw: spectrum: Add a new type of KVD
             linear record") for more details.
 
+        .fid_families.<family-name>.fids.<fid-number>.flood_mid_indexes.UC
+            MID index for flooding unicast packets, the value is the
+            result of 'mid_base' + 'fid_offset', when 'mid_base' is per
+            FID family and packet type (UC/MC/BC). See kernel commit
+            9f6f467a3cdb1 ("mlxsw: spectrum_fid: Set 'mid_base' as part
+            of flood tables initialization")
+
+        .fid_families.<family-name>.fids.<fid-number>.flood_mid_indexes.MC
+            MID index for flooding multicast packets, see more details
+            in the description of 'flood_mid_indexes.UC'.
+
+        .fid_families.<family-name>.fids.<fid-number>.flood_mid_indexes.BC
+            MID index for flooding broadcast packets, see more details
+            in the description of 'flood_mid_indexes.UC'.
+
         fid_dump always outputs the complete information. Filtering and
         querying can be done e.g. through `jq`.
 
@@ -126,7 +141,12 @@ EXAMPLE:
               "vni": 10,
               "nve_ifindex": 97,
               "nve_ifname": "vxlan0",
-              "nve_flood_index": 0
+              "nve_flood_index": 0,
+              "flood_mid_indexes": {
+                "UC": 12282,
+                "MC": 13306,
+                "BC": 14330
+              }
             }
           }
         },
