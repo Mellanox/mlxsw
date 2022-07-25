@@ -1,0 +1,101 @@
+NAME
+
+        mdb_table_dump - Dump mlxsw MDB (multicast group database)
+        configuration
+
+SYNOPSIS:
+
+        mdb_table_dump
+
+DESCRIPTION:
+
+        mdb_table_dump is a tool written on top of drgn, for dumping internal
+        structures of mlxsw driver related to MDB table. That way it is
+        possible to find out how MDB entries are configured in the ASIC.
+        In Linux, the MDB table is stored per bridge device, so the tool
+        dumps the table per bridge device.
+
+OUTPUT
+
+        As an output, mdb_table_dump emits a JSON object with the following
+        attributes:
+
+        .<bridge-device-name>.<mid-index>.mac_address
+            MAC address, the pair {MAC, FID} is used as an index to the
+            multicast FDB table.
+
+        .<bridge-device-name>.<mid-index>.fid_index
+            FID index, the pair {MAC, FID} is used as an index to the
+            multicast FDB table.
+
+        .<bridge-device-name>.<mid-index>.mid_index
+            MID index. This is the index to the PGT table which
+            maintains a list of ports to transmit packets which point to
+            the entry.
+
+        .<bridge-device-name>.<mid-index>.ports_list
+            List of ports which are configured in the PGT table in the
+            relevant MID index. Packets which point to the MID index,
+            will be transmitted to all the ports in the list.
+
+        .<bridge-device-name>.<mid-index>.ports_list.<netdev>.local_port
+            A local port to transmit the packet to.
+
+        .<bridge-device-name>.<mid-index>.ports_list.<netdev>.refcount
+            Reference counter of the port. MDB entries in the Linux bridge
+            are keyed according to their multicast IP, when these entries
+            are notified to device drivers via switchdev, the multicast IP
+            is converted to a multicast MAC. This conversion might cause
+            collisions, so port can be used more than once in MDB entry
+            which is keyed by MAC.
+
+        .<bridge-device-name>.<mid-index>.ports_list.<netdev>.mrouter
+            Indicates if the port is multicast router or not. See more
+            information in kernel commit d2994e1305858 ("mlxsw:
+            spectrum_switchdev: Add support for maintaining list of ports per
+            MDB entry")
+
+        mdb_table_dump always outputs the complete information. Filtering
+        and querying can be done e.g. through `jq`.
+
+EXAMPLE:
+
+    # ./mdb_table_dump | jq
+    {
+      "br0": {
+        "15354": {
+          "mac_address": "33:33:ff:82:bf:af",
+          "fid_index": 1,
+          "mid_index": 15354,
+          "ports_list": {
+            "swp28": {
+              "local_port": 57,
+              "refcount": 1,
+              "mrouter": false
+            }
+          }
+        },
+        "15355": {
+          "mac_address": "33:33:ff:f5:ee:1c",
+          "fid_index": 1,
+          "mid_index": 15355,
+          "ports_list": {
+            "swp26": {
+              "local_port": 49,
+              "refcount": 1,
+              "mrouter": false
+            },
+            "swp25": {
+              "local_port": 53,
+              "refcount": 1,
+              "mrouter": false
+            }
+          }
+        }
+      }
+    }
+
+SEE ALSO:
+
+    https://github.com/Mellanox/mlxsw/wiki
+    https://drgn.readthedocs.io
