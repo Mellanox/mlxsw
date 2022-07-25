@@ -41,6 +41,20 @@ class MlxswSp:
                 continue
             yield MlxswSpPort(self._mlxsw_sp.ports[i])
 
+    def ports_mapping(self):
+        ports_mapping = {}
+        for mlxsw_sp_port in self.ports():
+            if mlxsw_sp_port.dev.value_() == 0:
+                continue
+
+            local_port = mlxsw_sp_port.local_port.value_()
+            ports_mapping[local_port] = mlxsw_sp_port.name()
+
+        router_port = self._mlxsw_sp.core.max_ports.value_() + 1
+        ports_mapping[router_port] = "router_port"
+
+        return ports_mapping
+
     @staticmethod
     def find():
         thermal_tz_list = prog['thermal_tz_list'].address_of_()
