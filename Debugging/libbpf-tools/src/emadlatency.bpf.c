@@ -11,6 +11,9 @@
 #define EMAD_OP_TLV_LEN			0x10
 #define EMAD_OP_TLV_METHOD_MASK		0x7F
 
+#define EMAD_HDR_LEN			EMAD_ETH_HDR_LEN + \
+					EMAD_OP_TLV_LEN
+
 enum {
 	EMAD_OP_TLV_METHOD_QUERY = 1,
 	EMAD_OP_TLV_METHOD_WRITE = 2,
@@ -51,17 +54,16 @@ struct {
 SEC("tracepoint/devlink/devlink_hwmsg")
 int handle__devlink_hwmsg(struct trace_event_raw_devlink_hwmsg *ctx)
 {
-	u8 emad[EMAD_ETH_HDR_LEN + EMAD_OP_TLV_LEN];
 	u64 slot, *tsp, ts = bpf_ktime_get_ns();
 	struct emad_op_tlv *op_tlv;
 	struct hist *histp_e2e;
+	u8 emad[EMAD_HDR_LEN];
 	struct hist_key hkey;
 	u32 buf_off;
 	s64 delta;
 
 	buf_off = ctx->__data_loc_buf & 0xFFFF;
-	bpf_probe_read(emad, EMAD_ETH_HDR_LEN + EMAD_OP_TLV_LEN,
-		       (void *) ctx + buf_off);
+	bpf_probe_read(emad, EMAD_HDR_LEN, (void *) ctx + buf_off);
 	op_tlv = (struct emad_op_tlv *)(emad + EMAD_ETH_HDR_LEN);
 
 	if (targ_reg_id && bpf_ntohs(op_tlv->reg_id) != targ_reg_id)
