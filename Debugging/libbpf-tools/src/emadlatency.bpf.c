@@ -89,20 +89,49 @@ struct {
 	__type(value, struct hist);
 } hists_e2e SEC(".maps");
 
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(max_entries, MAX_ENTRIES);
+	__type(key, struct hist_key);
+	__type(value, struct hist);
+} hists_fw SEC(".maps");
+
+
 SEC("tracepoint/devlink/devlink_hwmsg")
 int handle__devlink_hwmsg(struct trace_event_raw_devlink_hwmsg *ctx)
 {
+	struct emad_latency_tlv *latency_tlv = NULL;
 	u64 slot, *tsp, ts = bpf_ktime_get_ns();
+	struct hist *histp_e2e, *histp_fw;
+	struct emad_type_len_tlv *tmp_tlv;
+	struct emad_type_len type_len;
 	struct emad_op_tlv *op_tlv;
-	struct hist *histp_e2e;
+	u32 buf_off, next_tlv_off;
 	u8 emad[EMAD_HDR_LEN];
 	struct hist_key hkey;
-	u32 buf_off;
+	u32 latency_time;
 	s64 delta;
 
 	buf_off = ctx->__data_loc_buf & 0xFFFF;
 	bpf_probe_read(emad, EMAD_HDR_LEN, (void *) ctx + buf_off);
-	op_tlv = (struct emad_op_tlv *)(emad + EMAD_ETH_HDR_LEN);
+
+	next_tlv_off = EMAD_ETH_HDR_LEN;
+	op_tlv = (struct emad_op_tlv *)(emad + next_tlv_off);
+
+	/* Check if there is STRING_TLV. */
+	next_tlv_off += EMAD_OP_TLV_LEN;
+	tmp_tlv = (struct emad_type_len_tlv *)(emad + next_tlv_off);
+	type_len = emad_decode_tl(tmp_tlv->type_len);
+	if (type_len.type == EMAD_STRING_TLV_TYPE)
+		next_tlv_off += EMAD_STRING_TLV_LEN;
+
+	/* Check if there is LATENCY_TLV. */
+	tmp_tlv = (struct emad_type_len_tlv *)(emad + next_tlv_off);
+	type_len = emad_decode_tl(tmp_tlv->type_len);
+	if (type_len.type == EMAD_LATENCY_TLV_TYPE) {
+		latency_tlv = (struct emad_latency_tlv *)(emad + next_tlv_off);
+		latency_time = bpf_ntohl(latency_tlv->latency_time);
+	}
 
 	if (targ_reg_id && bpf_ntohs(op_tlv->reg_id) != targ_reg_id)
 		return 0;
@@ -146,6 +175,26 @@ int handle__devlink_hwmsg(struct trace_event_raw_devlink_hwmsg *ctx)
 	__sync_fetch_and_add(&histp_e2e->slots[slot], 1);
 	__sync_fetch_and_add(&histp_e2e->latency, delta);
 	__sync_fetch_and_add(&histp_e2e->count, 1);
+
+	if (!latency_tlv)
+		goto cleanup;
+
+	/* Lookup at hists_fw */
+	histp_fw = bpf_map_lookup_elem(&hists_fw, &hkey);
+	if (!histp_fw) {
+		bpf_map_update_elem(&hists_fw, &hkey, &initial_hist, BPF_ANY);
+		histp_fw = bpf_map_lookup_elem(&hists_fw, &hkey);
+		if (!histp_fw)
+			goto cleanup;
+	}
+
+	/* Insert to histp_fw */
+	slot = log2l(latency_time);
+	if (slot >= MAX_SLOTS)
+		slot = MAX_SLOTS - 1;
+	__sync_fetch_and_add(&histp_fw->slots[slot], 1);
+	__sync_fetch_and_add(&histp_fw->latency, latency_time);
+	__sync_fetch_and_add(&histp_fw->count, 1);
 
 cleanup:
 	bpf_map_delete_elem(&start, &op_tlv->tid);
