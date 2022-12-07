@@ -23,6 +23,7 @@ static struct env {
 	bool writes;
 	bool average;
 	bool verbose;
+	bool fw_measure;
 	time_t interval;
 	int times;
 } env = {
@@ -37,7 +38,7 @@ const char *argp_program_bug_address = "<mlxsw@nvidia.com>";
 const char argp_program_doc[] =
 "Summarize EMAD latency as a histogram.\n"
 "\n"
-"USAGE: emadlatency [--help] [-T] [-m] [-r] [-q] [-w] [-a] [-v] [interval] [count]\n"
+"USAGE: emadlatency [--help] [-T] [-m] [-r] [-q] [-w] [-a] [-v] [-f] [interval] [count]\n"
 "\n"
 "EXAMPLES:\n"
 "    emadlatency             # summarize EMAD latency as a histogram\n"
@@ -46,7 +47,8 @@ const char argp_program_doc[] =
 "    emadlatency -r SFN      # measure latency of SFN EMADs only\n"
 "    emadlatency -q          # only show latency of EMAD queries\n"
 "    emadlatency -w          # only show latency of EMAD writes\n"
-"    emadlatency -a          # also show average latency\n";
+"    emadlatency -a          # also show average latency\n"
+"    emadlatency -f          # also show latency which is measured by firmware\n";
 
 static const struct argp_option opts[] = {
 	{ "milliseconds", 'm', NULL, 0, "Millisecond histogram" },
@@ -56,6 +58,7 @@ static const struct argp_option opts[] = {
 	{ "write", 'w', NULL, 0, "Show latency of EMAD writes only" },
 	{ "average", 'a', NULL, 0, "Also show average latency" },
 	{ "verbose", 'v', NULL, 0, "Verbose debug output" },
+	{ "firmware", 'f', NULL, 0, "Show latency of EMAD which is measured by firmware" },
 	{},
 };
 
@@ -254,6 +257,9 @@ static error_t parse_arg(int key, char *arg, struct argp_state *state)
 	case 'v':
 		env.verbose = true;
 		break;
+	case 'f':
+		env.fw_measure = true;
+		break;
 	case ARGP_KEY_ARG:
 		errno = 0;
 		if (pos_args == 0) {
@@ -317,14 +323,18 @@ static void print_measurements(struct hist hist, const char *desc, bool average,
 	print_log2_hist(hist.slots, MAX_SLOTS, units);
 }
 
-static int print_log2_hists(struct bpf_map *hists_e2e, const char *desc_e2e)
+static int print_log2_hists(struct bpf_map *hists_e2e, const char *desc_e2e,
+			    struct bpf_map *hists_fw, const char *desc_fw)
 {
 	const char *units = env.milliseconds ? "msecs" : "usecs";
 	struct hist_key lookup_key, next_key;
-	struct hist hist_e2e;
-	int err, fd_e2e;
+	struct hist hist_e2e, hist_fw;
+	int err, fd_e2e, fd_fw;
 
 	fd_e2e = bpf_map__fd(hists_e2e);
+
+	if (hists_fw)
+		fd_fw = bpf_map__fd(hists_fw);
 
 	memset(&lookup_key, 0, sizeof(lookup_key));
 	while (!bpf_map_get_next_key(fd_e2e, &lookup_key, &next_key)) {
@@ -341,7 +351,25 @@ static int print_log2_hists(struct bpf_map *hists_e2e, const char *desc_e2e)
 
 		print_reg_name(next_key);
 		print_measurements(hist_e2e, desc_e2e, env.average, units);
+
+		if (!hists_fw)
+			goto next_key;
+
+		/* Print Firmware measurements. */
+		err = bpf_map_lookup_elem(fd_fw, &next_key, &hist_fw);
+		if (err < 0)
+			/* It is ok that there is no such key in firmware
+			 * histograms as Latency TLV is optional and is not
+			 * necessarily attached to each EMAD.
+			 */
+			goto next_key;
+
+		printf("\n");
+		print_measurements(hist_fw, desc_fw, env.average, units);
+
+next_key:
 		lookup_key = next_key;
+		printf("\n\n\n");
 	}
 
 	memset(&lookup_key, 0, sizeof(lookup_key));
@@ -421,7 +449,9 @@ int main(int argc, char **argv)
 			printf("%-8s\n", ts);
 		}
 
-		err = print_log2_hists(obj->maps.hists_e2e, "E2E Measurements");
+		err = print_log2_hists(obj->maps.hists_e2e, "E2E Measurements",
+				       env.fw_measure ? obj->maps.hists_fw : NULL,
+				       "Firmware Measurements");
 		if (err)
 			break;
 
