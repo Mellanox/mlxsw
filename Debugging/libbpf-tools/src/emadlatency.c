@@ -315,17 +315,18 @@ static void print_measurements(struct hist hist, bool average,
 	print_log2_hist(hist.slots, MAX_SLOTS, units);
 }
 
-static
-int print_log2_hists(struct bpf_map *hists)
+static int print_log2_hists(struct bpf_map *hists_e2e)
 {
 	const char *units = env.milliseconds ? "msecs" : "usecs";
 	struct hist_key lookup_key, next_key;
-	int err, fd = bpf_map__fd(hists);
-	struct hist hist;
+	struct hist hist_e2e;
+	int err, fd_e2e;
+
+	fd_e2e = bpf_map__fd(hists_e2e);
 
 	memset(&lookup_key, 0, sizeof(lookup_key));
-	while (!bpf_map_get_next_key(fd, &lookup_key, &next_key)) {
-		err = bpf_map_lookup_elem(fd, &next_key, &hist);
+	while (!bpf_map_get_next_key(fd_e2e, &lookup_key, &next_key)) {
+		err = bpf_map_lookup_elem(fd_e2e, &next_key, &hist_e2e);
 		if (err < 0) {
 			fprintf(stderr, "Failed to lookup hist: %d\n", err);
 			return -1;
@@ -337,13 +338,13 @@ int print_log2_hists(struct bpf_map *hists)
 		}
 
 		print_reg_name(next_key);
-		print_measurements(hist, env.average, units);
+		print_measurements(hist_e2e, env.average, units);
 		lookup_key = next_key;
 	}
 
 	memset(&lookup_key, 0, sizeof(lookup_key));
-	while (!bpf_map_get_next_key(fd, &lookup_key, &next_key)) {
-		err = bpf_map_delete_elem(fd, &next_key);
+	while (!bpf_map_get_next_key(fd_e2e, &lookup_key, &next_key)) {
+		err = bpf_map_delete_elem(fd_e2e, &next_key);
 		if (err < 0) {
 			fprintf(stderr, "Failed to cleanup hist : %d\n", err);
 			return -1;
@@ -418,7 +419,7 @@ int main(int argc, char **argv)
 			printf("%-8s\n", ts);
 		}
 
-		err = print_log2_hists(obj->maps.hists);
+		err = print_log2_hists(obj->maps.hists_e2e);
 		if (err)
 			break;
 

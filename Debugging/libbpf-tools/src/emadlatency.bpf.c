@@ -46,7 +46,7 @@ struct {
 	__uint(max_entries, MAX_ENTRIES);
 	__type(key, struct hist_key);
 	__type(value, struct hist);
-} hists SEC(".maps");
+} hists_e2e SEC(".maps");
 
 SEC("tracepoint/devlink/devlink_hwmsg")
 int handle__devlink_hwmsg(struct trace_event_raw_devlink_hwmsg *ctx)
@@ -54,8 +54,8 @@ int handle__devlink_hwmsg(struct trace_event_raw_devlink_hwmsg *ctx)
 	u8 emad[EMAD_ETH_HDR_LEN + EMAD_OP_TLV_LEN];
 	u64 slot, *tsp, ts = bpf_ktime_get_ns();
 	struct emad_op_tlv *op_tlv;
+	struct hist *histp_e2e;
 	struct hist_key hkey;
-	struct hist *histp;
 	u32 buf_off;
 	s64 delta;
 
@@ -85,14 +85,16 @@ int handle__devlink_hwmsg(struct trace_event_raw_devlink_hwmsg *ctx)
 	hkey.write = ((op_tlv->r_method & EMAD_OP_TLV_METHOD_MASK) ==
 		      EMAD_OP_TLV_METHOD_WRITE);
 
-	histp = bpf_map_lookup_elem(&hists, &hkey);
-	if (!histp) {
-		bpf_map_update_elem(&hists, &hkey, &initial_hist, BPF_ANY);
-		histp = bpf_map_lookup_elem(&hists, &hkey);
-		if (!histp)
+	/* Lookup at hists_e2e */
+	histp_e2e = bpf_map_lookup_elem(&hists_e2e, &hkey);
+	if (!histp_e2e) {
+		bpf_map_update_elem(&hists_e2e, &hkey, &initial_hist, BPF_ANY);
+		histp_e2e = bpf_map_lookup_elem(&hists_e2e, &hkey);
+		if (!histp_e2e)
 			goto cleanup;
 	}
 
+	/* Insert to histp_e2e */
 	if (targ_ms)
 		delta /= 1000000U;
 	else
@@ -101,9 +103,9 @@ int handle__devlink_hwmsg(struct trace_event_raw_devlink_hwmsg *ctx)
 	slot = log2l(delta);
 	if (slot >= MAX_SLOTS)
 		slot = MAX_SLOTS - 1;
-	__sync_fetch_and_add(&histp->slots[slot], 1);
-	__sync_fetch_and_add(&histp->latency, delta);
-	__sync_fetch_and_add(&histp->count, 1);
+	__sync_fetch_and_add(&histp_e2e->slots[slot], 1);
+	__sync_fetch_and_add(&histp_e2e->latency, delta);
+	__sync_fetch_and_add(&histp_e2e->count, 1);
 
 cleanup:
 	bpf_map_delete_elem(&start, &op_tlv->tid);
