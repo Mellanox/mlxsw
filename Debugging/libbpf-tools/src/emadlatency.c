@@ -294,6 +294,27 @@ static void sig_handler(int sig)
 	exiting = true;
 }
 
+static void print_reg_name(struct hist_key key)
+{
+	const char *reg_name = name_find_by_reg_id(key.reg_id);
+
+	printf("Register %s = %s (0x%x)\n",
+	       key.write ? "write" : "query",
+	       reg_name ? reg_name : "Unknown register",
+	       key.reg_id);
+}
+
+static void print_measurements(struct hist hist, bool average,
+			       const char *units)
+{
+	if (average)
+		printf("average = %llu %s, total = %llu %s, count = %llu\n",
+		       hist.latency / hist.count, units, hist.latency,
+		       units, hist.count);
+
+	print_log2_hist(hist.slots, MAX_SLOTS, units);
+}
+
 static
 int print_log2_hists(struct bpf_map *hists)
 {
@@ -304,8 +325,6 @@ int print_log2_hists(struct bpf_map *hists)
 
 	memset(&lookup_key, 0, sizeof(lookup_key));
 	while (!bpf_map_get_next_key(fd, &lookup_key, &next_key)) {
-		const char *reg_name;
-
 		err = bpf_map_lookup_elem(fd, &next_key, &hist);
 		if (err < 0) {
 			fprintf(stderr, "Failed to lookup hist: %d\n", err);
@@ -317,16 +336,8 @@ int print_log2_hists(struct bpf_map *hists)
 			continue;
 		}
 
-		reg_name = name_find_by_reg_id(next_key.reg_id);
-		printf("Register %s = %s (0x%x)\n",
-		       next_key.write ? "write" : "query",
-		       reg_name ? reg_name : "Unknown register",
-		       next_key.reg_id);
-		if (env.average)
-			printf(" average = %llu %s, total = %llu %s, count = %llu\n",
-			       hist.latency / hist.count, units, hist.latency,
-			       units, hist.count);
-		print_log2_hist(hist.slots, MAX_SLOTS, units);
+		print_reg_name(next_key);
+		print_measurements(hist, env.average, units);
 		lookup_key = next_key;
 	}
 
