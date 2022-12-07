@@ -323,6 +323,18 @@ static void print_measurements(struct hist hist, const char *desc, bool average,
 	print_log2_hist(hist.slots, MAX_SLOTS, units);
 }
 
+static void print_diff(struct hist e2e_hist, struct hist fw_hist,
+		       const char *units)
+{
+	unsigned long long e2e_average, fw_average;
+
+	e2e_average = e2e_hist.latency / e2e_hist.count;
+	fw_average = fw_hist.latency / fw_hist.count;
+
+	printf("\nDiff between measurements: %u %s\n",
+	       abs(e2e_average - fw_average), units);
+}
+
 static int print_log2_hists(struct bpf_map *hists_e2e, const char *desc_e2e,
 			    struct bpf_map *hists_fw, const char *desc_fw)
 {
@@ -366,6 +378,8 @@ static int print_log2_hists(struct bpf_map *hists_e2e, const char *desc_e2e,
 
 		printf("\n");
 		print_measurements(hist_fw, desc_fw, env.average, units);
+
+		print_diff(hist_fw, hist_e2e, units);
 
 next_key:
 		lookup_key = next_key;
