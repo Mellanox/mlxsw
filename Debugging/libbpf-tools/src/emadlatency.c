@@ -304,9 +304,11 @@ static void print_reg_name(struct hist_key key)
 	       key.reg_id);
 }
 
-static void print_measurements(struct hist hist, bool average,
+static void print_measurements(struct hist hist, const char *desc, bool average,
 			       const char *units)
 {
+	printf("%s:\n", desc);
+
 	if (average)
 		printf("average = %llu %s, total = %llu %s, count = %llu\n",
 		       hist.latency / hist.count, units, hist.latency,
@@ -315,7 +317,7 @@ static void print_measurements(struct hist hist, bool average,
 	print_log2_hist(hist.slots, MAX_SLOTS, units);
 }
 
-static int print_log2_hists(struct bpf_map *hists_e2e)
+static int print_log2_hists(struct bpf_map *hists_e2e, const char *desc_e2e)
 {
 	const char *units = env.milliseconds ? "msecs" : "usecs";
 	struct hist_key lookup_key, next_key;
@@ -338,7 +340,7 @@ static int print_log2_hists(struct bpf_map *hists_e2e)
 		}
 
 		print_reg_name(next_key);
-		print_measurements(hist_e2e, env.average, units);
+		print_measurements(hist_e2e, desc_e2e, env.average, units);
 		lookup_key = next_key;
 	}
 
@@ -419,7 +421,7 @@ int main(int argc, char **argv)
 			printf("%-8s\n", ts);
 		}
 
-		err = print_log2_hists(obj->maps.hists_e2e);
+		err = print_log2_hists(obj->maps.hists_e2e, "E2E Measurements");
 		if (err)
 			break;
 
