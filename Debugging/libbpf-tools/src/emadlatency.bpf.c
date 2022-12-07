@@ -9,10 +9,17 @@
 
 #define EMAD_ETH_HDR_LEN		0x10
 #define EMAD_OP_TLV_LEN			0x10
+#define EMAD_STRING_TLV_LEN		0x84
+#define EMAD_LATENCY_TLV_LEN		0x1C
 #define EMAD_OP_TLV_METHOD_MASK		0x7F
 
 #define EMAD_HDR_LEN			EMAD_ETH_HDR_LEN + \
-					EMAD_OP_TLV_LEN
+					EMAD_OP_TLV_LEN + \
+					EMAD_STRING_TLV_LEN + \
+					EMAD_LATENCY_TLV_LEN
+
+#define EMAD_STRING_TLV_TYPE		2
+#define EMAD_LATENCY_TLV_TYPE		4
 
 enum {
 	EMAD_OP_TLV_METHOD_QUERY = 1,
@@ -29,6 +36,37 @@ struct emad_op_tlv {
         u8 resv3;
         u64 tid;
 };
+
+struct emad_latency_tlv {
+	u16 type_len;
+	u16 resv1;
+	u32 latency_time;
+	u32 resv2;
+	u32 resv3;
+	u32 resv4;
+	u32 resv5;
+	u32 resv6;
+};
+
+struct emad_type_len_tlv {
+	u16 type_len;
+	u16 pad;
+};
+
+struct emad_type_len {
+	u8 type;
+	u16 len;
+};
+
+static struct emad_type_len emad_decode_tl(u16 type_len_be)
+{
+	u16 type_len = bpf_ntohs(type_len_be);
+
+	return (struct emad_type_len) {
+		.type = type_len >> 11,
+		.len = type_len & 0x7ff,
+	};
+}
 
 #define MAX_ENTRIES	10240
 
