@@ -1137,20 +1137,10 @@ int resmon_reg_process_emad(struct resmon_reg *rreg,
 	op_tlv = RESMON_REG_READ(sizeof(*op_tlv), buf, len);
 	tl = resmon_reg_emad_decode_tl(op_tlv->type_len);
 
-	RESMON_REG_PULL(tl.length * 4, buf, len);
-	reg_tlv = RESMON_REG_READ(sizeof(*reg_tlv), buf, len);
-	tl = resmon_reg_emad_decode_tl(reg_tlv->type_len);
-
-	/* Skip over the TLV if it is in fact a STRING TLV. */
-	if (tl.type == MLXSW_EMAD_TLV_TYPE_STRING) {
+	while (tl.type != MLXSW_EMAD_TLV_TYPE_REG) {
 		RESMON_REG_PULL(tl.length * 4, buf, len);
 		reg_tlv = RESMON_REG_READ(sizeof(*reg_tlv), buf, len);
 		tl = resmon_reg_emad_decode_tl(reg_tlv->type_len);
-	}
-
-	if (tl.type != MLXSW_EMAD_TLV_TYPE_REG) {
-		resmon_fmterr(error, "EMAD malformed: No register");
-		return -1;
 	}
 
 	/* Get to the register payload. */
