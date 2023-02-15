@@ -77,7 +77,7 @@ $(OUTPUT)/resmon: CFLAGS += $(shell pkgconf --libs libelf json-c libsystemd \
 				libnl-3.0 libnl-genl-3.0)
 $(OUTPUT)/resmon: $(resmon-OBJECTS) $(LIBBPF_OBJ) $(COMMON_OBJ)
 	$(call msg,BINARY,$@)
-	$(Q)$(CC) $(CFLAGS) -lz $^ -o $@
+	$(Q)$(CC) $^ $(CFLAGS) -lz -o $@
 
 $(OUTPUT)/%.o: %.c resmon.h mlxsw.h $(COMMON_OBJ) | $(OUTPUT)
 	$(call msg,CC,$@)
