@@ -401,7 +401,7 @@ struct resmon_stat *resmon_stat_create(void)
 	struct resmon_stat *stat;
 	int err;
 
-	stat = malloc(sizeof(*stat));
+	stat = calloc(1, sizeof(*stat));
 	if (stat == NULL)
 		return NULL;
 
