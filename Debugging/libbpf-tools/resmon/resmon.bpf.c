@@ -75,39 +75,13 @@ static int push_to_ringbuf(const u8 *buf, size_t len)
 	return 0;
 }
 
-static inline bool is_mlxsw_spectrum(struct devlink *devlink)
+SEC("fentry/mlxsw_emad_rx_listener_func")
+int BPF_PROG(mlxsw_emad_rx_listener_func, struct sk_buff *skb)
 {
-	static const char mlxsw_spectrum[] = "mlxsw_spectrum";
-	char name_buf[sizeof(mlxsw_spectrum)];
-	const char *drv_name;
-
-	drv_name = BPF_CORE_READ(devlink, dev, driver, name);
-	bpf_core_read_str(&name_buf, sizeof(name_buf), drv_name);
-
-	for (unsigned int i = 0; i < sizeof(name_buf); i++)
-		if (name_buf[i] != mlxsw_spectrum[i])
-			return false;
-
-	return true;
-}
-
-SEC("raw_tracepoint/devlink_hwmsg")
-int BPF_PROG(handle__devlink_hwmsg,
-	     struct devlink *devlink, bool incoming, unsigned long type,
-	     const u8 *buf, size_t len)
-{
-	struct emad_op_tlv op_tlv;
 	struct emad_tlv_head tlv_head;
-
-	if (!is_mlxsw_spectrum(devlink))
-		return 0;
-
-	/* Only consider EMADs sent from the FW to the driver, as those
-	 * refer to resources that were actually allocated, not driver
-	 * requests for allocation.
-	 */
-	if (!incoming)
-		return 0;
+	struct emad_op_tlv op_tlv;
+	void *buf = skb->data;
+	unsigned int len;
 
 	buf += EMAD_ETH_HDR_LEN;
 
@@ -138,10 +112,9 @@ int BPF_PROG(handle__devlink_hwmsg,
 	case 0x201C: /* MLXSW_REG_SVFA_ID */
 	case 0x8021: /* MLXSW_REG_RIPS_ID */
 	case 0x201F: /* MLXSW_REG_SFMR_ID */
-		return push_to_ringbuf(buf, len);
+		return push_to_ringbuf(buf, skb->len - EMAD_ETH_HDR_LEN);
 	};
 	return 0;
-
 }
 
 char LICENSE[] SEC("license") = "GPL";

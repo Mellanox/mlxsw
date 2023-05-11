@@ -36,15 +36,12 @@ reasonable to exclude KVDL resources from being monitored. See
 ## Method of Operation
 
 The driver communicates with the device using Ethernet packets called
-Ethernet Management Datagrams (EMADs). As of Linux 4.8, it has become
-possible to monitor all messages sent between the driver and the device
-using a kernel tracepoint called devlink:devlink_hwmsg.
-
-The tool works by hooking up to the tracepoint, filtering out register
-EMADs, and of those the registers that might indicate resource allocation
-or deallocation. These it sends through a ring buffer to the user-space
-daemon that dissects the registers and keeps track of state of individual
-resources.
+Ethernet Management Datagrams (EMADs). The tool works by hooking up to a
+function in the `mlxsw` driver that processes EMAD responses, filtering
+out register EMADs that might indicate resource allocation or
+deallocation. These it sends through a ring buffer to the user-space
+daemon that dissects the registers and keeps track of state of
+individual resources.
 
 OPTIONS
 =======
