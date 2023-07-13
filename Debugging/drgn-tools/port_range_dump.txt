@@ -1,0 +1,70 @@
+NAME
+
+        port_range_dump - Dump mlxsw port range registers
+
+SYNOPSIS:
+
+        port_range_dump
+
+DESCRIPTION:
+
+        port_range_dump is a tool written on top of drgn, for dumping
+        internal structures of mlxsw driver related to port range
+        registers. See kernel commit b3eb04be7299 ("mlxsw:
+        spectrum_port_range: Add port range core") for more details.
+
+OUTPUT
+
+        As an output, port_range_dump emits a JSON object with the
+        following attributes:
+
+        .port_range_registers.<index>.min_port
+            The minimum port number of the port range register.
+            Inclusive.
+
+        .port_range_registers.<index>.max_port
+            The maximum port number of the port range register.
+            Inclusive.
+
+        .port_range_registers.<index>.is_source
+            Whether the port range register is configured to match on a
+            source port range or a destination port range.
+
+        .port_range_registers.<index>.refcount
+            The port range register's reference count. In other words,
+            the number of filters using the register.
+
+        .port_range_registers.<index>.index
+            The port range register's index.
+
+EXAMPLE:
+
+    # tc qdisc add dev swp1 clsact
+    # tc filter add dev swp1 ingress pref 1 proto ip flower skip_sw ip_proto udp src_port 100-200 action pass
+    # tc filter add dev swp1 ingress pref 1 proto ip flower skip_sw ip_proto tcp src_port 100-200 action pass
+    # tc filter add dev swp1 ingress pref 1 proto ip flower skip_sw ip_proto tcp dst_port 300-400 action pass
+
+    # port_range_dump | jq
+    {
+      "port_range_registers": {
+        "0": {
+          "min_port": 100,
+          "max_port": 200,
+          "is_source": true,
+          "refcount": 2,
+          "index": 0
+        },
+        "1": {
+          "min_port": 300,
+          "max_port": 400,
+          "is_source": false,
+          "refcount": 1,
+          "index": 1
+        }
+      }
+    }
+
+SEE ALSO:
+
+    https://github.com/Mellanox/mlxsw/wiki
+    https://drgn.readthedocs.io
