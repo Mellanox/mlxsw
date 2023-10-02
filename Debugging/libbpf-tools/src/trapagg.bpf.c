@@ -55,7 +55,7 @@ static __always_inline bool
 flow_dissector_ipv4_dissect(struct sk_buff *skb, struct trap_flow_key *flow,
 			    u16 *p_offset)
 {
-	void *skb_data = (void *)(long) skb->data;
+	void *skb_data = skb->head + skb->mac_header;
 	struct iphdr iph;
 
 	if (!flow_dissector_valid_access(skb, *p_offset, sizeof(iph)))
@@ -86,7 +86,7 @@ static __always_inline bool
 flow_dissector_ipv6_dissect(struct sk_buff *skb, struct trap_flow_key *flow,
 			    u16 *p_offset)
 {
-	void *skb_data = (void *)(long) skb->data;
+	void *skb_data = skb->head + skb->mac_header;
 	struct ipv6hdr ip6h;
 
 	if (!flow_dissector_valid_access(skb, *p_offset, sizeof(ip6h)))
@@ -108,7 +108,7 @@ static __always_inline bool
 flow_dissector_gre_dissect(struct sk_buff *skb, struct trap_flow_key *flow,
 			   u16 *p_offset)
 {
-	void *skb_data = (void *)(long) skb->data;
+	void *skb_data = skb->head + skb->mac_header;
 	struct gre_base_hdr gre;
 
 	if (!flow_dissector_valid_access(skb, *p_offset, sizeof(gre)))
@@ -139,7 +139,7 @@ static __always_inline bool
 flow_dissector_udp_dissect(struct sk_buff *skb, struct trap_flow_key *flow,
 			   u16 *p_offset)
 {
-	void *skb_data = (void *)(long) skb->data;
+	void *skb_data = skb->head + skb->mac_header;
 	struct udphdr udp;
 
 	if (!flow_dissector_valid_access(skb, *p_offset, sizeof(udp)))
@@ -159,7 +159,7 @@ static __always_inline bool
 flow_dissector_tcp_dissect(struct sk_buff *skb, struct trap_flow_key *flow,
 			   u16 *p_offset)
 {
-	void *skb_data = (void *)(long) skb->data;
+	void *skb_data = skb->head + skb->mac_header;
 	struct tcphdr tcp;
 
 	if (!flow_dissector_valid_access(skb, *p_offset, sizeof(tcp)))
@@ -181,10 +181,14 @@ flow_dissector_tcp_dissect(struct sk_buff *skb, struct trap_flow_key *flow,
 static __always_inline void flow_dissector(struct sk_buff *skb,
 					   struct trap_flow_key *flow)
 {
-	void *skb_data = (void *)(long) skb->data;
+	void *skb_data = skb->head + skb->mac_header;
 	struct vlan_hdr vlan_hdr;
 	u16 offset, eth_proto;
 	struct ethhdr eth;
+
+	/* Skip if MAC header was not set. */
+	if (skb->mac_header == 0xffff)
+		return;
 
 	if (!flow_dissector_valid_access(skb, 0, sizeof(eth)))
 		return;
