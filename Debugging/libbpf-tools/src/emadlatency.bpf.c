@@ -7,6 +7,8 @@
 #include "emadlatency.h"
 #include "bits.bpf.h"
 
+#define EMAD_TXHDR_LEN			0x10
+
 #define EMAD_ETH_HDR_LEN		0x10
 #define EMAD_OP_TLV_LEN			0x10
 #define EMAD_STRING_TLV_LEN		0x84
@@ -96,6 +98,50 @@ struct {
 	__type(value, struct hist);
 } hists_fw SEC(".maps");
 
+SEC("fentry/mlxsw_emad_transmit")
+int BPF_PROG(mlxsw_emad_transmit, struct mlxsw_core *mlxsw_core,
+	     struct mlxsw_reg_trans *trans)
+{
+	struct emad_latency_tlv *latency_tlv = NULL;
+	struct emad_type_len_tlv *tmp_tlv;
+	struct emad_type_len type_len;
+	u64 ts = bpf_ktime_get_ns();
+	struct emad_op_tlv *op_tlv;
+	u8 emad[EMAD_HDR_LEN];
+	struct sk_buff *skb;
+	u32 latency_time;
+	u32 next_tlv_off;
+	void *buf;
+
+	skb = trans->tx_skb;
+	buf = skb->data + EMAD_TXHDR_LEN;
+
+	bpf_probe_read(emad, EMAD_HDR_LEN, buf);
+
+	next_tlv_off = EMAD_ETH_HDR_LEN;
+	op_tlv = (struct emad_op_tlv *)(emad + next_tlv_off);
+
+	/* Check if there is STRING_TLV. */
+	next_tlv_off += EMAD_OP_TLV_LEN;
+	tmp_tlv = (struct emad_type_len_tlv *)(emad + next_tlv_off);
+	type_len = emad_decode_tl(tmp_tlv->type_len);
+	if (type_len.type == EMAD_STRING_TLV_TYPE)
+		next_tlv_off += EMAD_STRING_TLV_LEN;
+
+	/* Check if there is LATENCY_TLV. */
+	tmp_tlv = (struct emad_type_len_tlv *)(emad + next_tlv_off);
+	type_len = emad_decode_tl(tmp_tlv->type_len);
+	if (type_len.type == EMAD_LATENCY_TLV_TYPE) {
+		latency_tlv = (struct emad_latency_tlv *)(emad + next_tlv_off);
+		latency_time = bpf_ntohl(latency_tlv->latency_time);
+	}
+
+	if (targ_reg_id && bpf_ntohs(op_tlv->reg_id) != targ_reg_id)
+		return 0;
+
+	bpf_map_update_elem(&start, &op_tlv->tid, &ts, BPF_ANY);
+	return 0;
+}
 
 SEC("tracepoint/devlink/devlink_hwmsg")
 int handle__devlink_hwmsg(struct trace_event_raw_devlink_hwmsg *ctx)
@@ -136,10 +182,8 @@ int handle__devlink_hwmsg(struct trace_event_raw_devlink_hwmsg *ctx)
 	if (targ_reg_id && bpf_ntohs(op_tlv->reg_id) != targ_reg_id)
 		return 0;
 
-	if (!ctx->incoming) {
-		bpf_map_update_elem(&start, &op_tlv->tid, &ts, BPF_ANY);
+	if (!ctx->incoming)
 		return 0;
-	}
 
 	tsp = bpf_map_lookup_elem(&start, &op_tlv->tid);
 	if (!tsp)
