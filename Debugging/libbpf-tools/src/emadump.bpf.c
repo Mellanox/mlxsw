@@ -45,6 +45,53 @@ struct {
 	__type(value, struct emad_event);
 } heap SEC(".maps");
 
+#define MLXSW_TXHDR_LEN 0x10
+
+SEC("fentry/mlxsw_emad_transmit")
+int BPF_PROG(mlxsw_emad_transmit, struct mlxsw_core *mlxsw_core,
+	     struct mlxsw_reg_trans *trans)
+{
+	u8 emad[EMAD_ETH_HDR_LEN + EMAD_OP_TLV_LEN];
+	u64 ts = bpf_ktime_get_ns() / 1000U;
+	struct emad_op_tlv *op_tlv;
+	struct emad_event *e;
+	struct sk_buff *skb;
+	size_t emad_len;
+	int zero = 0;
+	void *buf;
+
+	skb = trans->tx_skb;
+	emad_len = skb->len - MLXSW_TXHDR_LEN;
+	buf = skb->data + MLXSW_TXHDR_LEN;
+
+	/* This should never happen. */
+	if (emad_len > EMAD_MAX_LEN)
+		return 0;
+
+	/* Allocate EMAD event from our "heap". */
+	e = bpf_map_lookup_elem(&heap, &zero);
+	if (!e) /* Cannot happen. */
+		return 0;
+
+	/* Initialize EMAD event. */
+	bpf_probe_read(&e->buf, emad_len, buf);
+	e->len = emad_len;
+	e->ts = ts;
+
+	/* If no filtering, then output the event to BPF ringbuf. */
+	if (!targ_errors && !targ_thresh_us) {
+		bpf_ringbuf_output(&rb, e, sizeof(*e), 0);
+		return 0;
+	}
+
+	bpf_probe_read(emad, EMAD_ETH_HDR_LEN + EMAD_OP_TLV_LEN, buf);
+	op_tlv = (struct emad_op_tlv *)(emad + EMAD_ETH_HDR_LEN);
+
+	/* Store EMAD request in a hash table for retrieval upon response. */
+	bpf_map_update_elem(&start, &op_tlv->tid, e, BPF_ANY);
+	return 0;
+}
+
 SEC("tracepoint/devlink/devlink_hwmsg")
 int handle__devlink_hwmsg(struct trace_event_raw_devlink_hwmsg *ctx)
 {
@@ -84,10 +131,8 @@ int handle__devlink_hwmsg(struct trace_event_raw_devlink_hwmsg *ctx)
 	op_tlv = (struct emad_op_tlv *)(emad + EMAD_ETH_HDR_LEN);
 
 	/* Store EMAD request in a hash table for retrieval upon response. */
-	if (!ctx->incoming) {
-		bpf_map_update_elem(&start, &op_tlv->tid, e, BPF_ANY);
+	if (!ctx->incoming)
 		return 0;
-	}
 
 	/* Retrieve the request from the response. */
 	req_e = bpf_map_lookup_elem(&start, &op_tlv->tid);
