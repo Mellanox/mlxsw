@@ -92,16 +92,16 @@ int BPF_PROG(mlxsw_emad_transmit, struct mlxsw_core *mlxsw_core,
 	return 0;
 }
 
-SEC("tracepoint/devlink/devlink_hwmsg")
-int handle__devlink_hwmsg(struct trace_event_raw_devlink_hwmsg *ctx)
+SEC("fentry/mlxsw_emad_rx_listener_func")
+int BPF_PROG(mlxsw_emad_rx_listener_func, struct sk_buff *skb)
 {
 	u8 emad[EMAD_ETH_HDR_LEN + EMAD_OP_TLV_LEN];
 	u64 ts = bpf_ktime_get_ns() / 1000U;
+	unsigned int emad_len = skb->len;
 	struct emad_event *e, *req_e;
-	size_t emad_len = ctx->len;
 	struct emad_op_tlv *op_tlv;
+	void *buf = skb->data;
 	int zero = 0;
-	u32 buf_off;
 	bool error;
 	s64 delta;
 
@@ -115,8 +115,7 @@ int handle__devlink_hwmsg(struct trace_event_raw_devlink_hwmsg *ctx)
 		return 0;
 
 	/* Initialize EMAD event. */
-	buf_off = ctx->__data_loc_buf & 0xFFFF;
-	bpf_probe_read(&e->buf, emad_len, (void *) ctx + buf_off);
+	bpf_probe_read(&e->buf, emad_len, buf);
 	e->len = emad_len;
 	e->ts = ts;
 
@@ -126,13 +125,8 @@ int handle__devlink_hwmsg(struct trace_event_raw_devlink_hwmsg *ctx)
 		return 0;
 	}
 
-	bpf_probe_read(emad, EMAD_ETH_HDR_LEN + EMAD_OP_TLV_LEN,
-		       (void *) ctx + buf_off);
+	bpf_probe_read(emad, EMAD_ETH_HDR_LEN + EMAD_OP_TLV_LEN, buf);
 	op_tlv = (struct emad_op_tlv *)(emad + EMAD_ETH_HDR_LEN);
-
-	/* Store EMAD request in a hash table for retrieval upon response. */
-	if (!ctx->incoming)
-		return 0;
 
 	/* Retrieve the request from the response. */
 	req_e = bpf_map_lookup_elem(&start, &op_tlv->tid);
