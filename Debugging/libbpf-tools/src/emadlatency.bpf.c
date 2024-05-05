@@ -143,8 +143,8 @@ int BPF_PROG(mlxsw_emad_transmit, struct mlxsw_core *mlxsw_core,
 	return 0;
 }
 
-SEC("tracepoint/devlink/devlink_hwmsg")
-int handle__devlink_hwmsg(struct trace_event_raw_devlink_hwmsg *ctx)
+SEC("fentry/mlxsw_emad_rx_listener_func")
+int BPF_PROG(mlxsw_emad_rx_listener_func, struct sk_buff *skb)
 {
 	struct emad_latency_tlv *latency_tlv = NULL;
 	u64 slot, *tsp, ts = bpf_ktime_get_ns();
@@ -152,14 +152,14 @@ int handle__devlink_hwmsg(struct trace_event_raw_devlink_hwmsg *ctx)
 	struct emad_type_len_tlv *tmp_tlv;
 	struct emad_type_len type_len;
 	struct emad_op_tlv *op_tlv;
-	u32 buf_off, next_tlv_off;
+	void *buf = skb->data;
 	u8 emad[EMAD_HDR_LEN];
 	struct hist_key hkey;
+	u32 next_tlv_off;
 	u32 latency_time;
 	s64 delta;
 
-	buf_off = ctx->__data_loc_buf & 0xFFFF;
-	bpf_probe_read(emad, EMAD_HDR_LEN, (void *) ctx + buf_off);
+	bpf_probe_read(emad, EMAD_HDR_LEN, buf);
 
 	next_tlv_off = EMAD_ETH_HDR_LEN;
 	op_tlv = (struct emad_op_tlv *)(emad + next_tlv_off);
@@ -180,9 +180,6 @@ int handle__devlink_hwmsg(struct trace_event_raw_devlink_hwmsg *ctx)
 	}
 
 	if (targ_reg_id && bpf_ntohs(op_tlv->reg_id) != targ_reg_id)
-		return 0;
-
-	if (!ctx->incoming)
 		return 0;
 
 	tsp = bpf_map_lookup_elem(&start, &op_tlv->tid);
