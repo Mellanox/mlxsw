@@ -7,8 +7,6 @@
 #include "emadlatency.h"
 #include "bits.bpf.h"
 
-#define EMAD_TXHDR_LEN			0x10
-
 #define EMAD_ETH_HDR_LEN		0x10
 #define EMAD_OP_TLV_LEN			0x10
 #define EMAD_STRING_TLV_LEN		0x84
@@ -114,7 +112,7 @@ int BPF_PROG(mlxsw_emad_transmit, struct mlxsw_core *mlxsw_core,
 	void *buf;
 
 	skb = trans->tx_skb;
-	buf = skb->data + EMAD_TXHDR_LEN;
+	buf = skb->data;
 
 	bpf_probe_read(emad, EMAD_HDR_LEN, buf);
 

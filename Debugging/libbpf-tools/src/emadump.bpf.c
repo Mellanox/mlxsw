@@ -45,8 +45,6 @@ struct {
 	__type(value, struct emad_event);
 } heap SEC(".maps");
 
-#define MLXSW_TXHDR_LEN 0x10
-
 SEC("fentry/mlxsw_emad_transmit")
 int BPF_PROG(mlxsw_emad_transmit, struct mlxsw_core *mlxsw_core,
 	     struct mlxsw_reg_trans *trans)
@@ -61,8 +59,8 @@ int BPF_PROG(mlxsw_emad_transmit, struct mlxsw_core *mlxsw_core,
 	void *buf;
 
 	skb = trans->tx_skb;
-	emad_len = skb->len - MLXSW_TXHDR_LEN;
-	buf = skb->data + MLXSW_TXHDR_LEN;
+	emad_len = skb->len;
+	buf = skb->data;
 
 	/* This should never happen. */
 	if (emad_len > EMAD_MAX_LEN)
