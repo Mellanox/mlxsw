@@ -516,6 +516,11 @@ static void resmon_reg_err_payload_truncated(char **error)
 	resmon_fmterr(error, "EMAD malformed: Payload truncated");
 }
 
+static void resmon_reg_err_tlv_length_0(char **error)
+{
+	resmon_fmterr(error, "EMAD malformed: 0-length TLV");
+}
+
 static int resmon_reg_insert_rc(int rc, char **error)
 {
 	if (rc != 0) {
@@ -1141,6 +1146,8 @@ int resmon_reg_process_emad(struct resmon_reg *rreg,
 	tl = resmon_reg_emad_decode_tl(op_tlv->type_len);
 
 	while (tl.type != MLXSW_EMAD_TLV_TYPE_REG) {
+		if (tl.length == 0)
+			goto tlv0;
 		RESMON_REG_PULL(tl.length * 4, buf, len);
 		reg_tlv = RESMON_REG_READ(sizeof(*reg_tlv), buf, len);
 		tl = resmon_reg_emad_decode_tl(reg_tlv->type_len);
@@ -1186,5 +1193,9 @@ int resmon_reg_process_emad(struct resmon_reg *rreg,
 
 oob:
 	resmon_reg_err_payload_truncated(error);
+	return -1;
+
+tlv0:
+	resmon_reg_err_tlv_length_0(error);
 	return -1;
 }
