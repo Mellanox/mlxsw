@@ -559,6 +559,13 @@ reg_tlv=$ralue_type_len$a_op_protocol$ralue_payload
 
 resmon_stats_no_change_test $(op_tlv_get $reg_id)$string_tlv$reg_tlv$end_tlv
 
+################## Invalid register ID ###################
+
+reg_id=1111
+reg_tlv=${ralue_type_len}001122334455667788990011223344556677889900
+
+resmon_stats_no_change_test $(op_tlv_get $reg_id)$string_tlv$reg_tlv$end_tlv
+
 ###################### Stop resmon #######################
 $RESMON stop
 

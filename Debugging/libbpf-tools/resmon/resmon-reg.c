@@ -7,6 +7,7 @@
 #include <stdlib.h>
 
 #include "resmon.h"
+#include "resmon-common.h"
 
 #define RESMON_REG_REGISTERS(X)		\
 	X(RALUE)			\
@@ -1122,6 +1123,8 @@ static unsigned int resmon_reg_register_as_regmask(uint16_t reg_id)
 static bool
 resmon_reg_should_handle(const struct resmon_reg *rreg, uint16_t reg_id)
 {
+	if (!resmon_reg_supported(reg_id))
+		return false;
 	return (rreg->regmask & resmon_reg_register_as_regmask(reg_id)) != 0;
 }
 

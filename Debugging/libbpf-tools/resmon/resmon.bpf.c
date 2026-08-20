@@ -5,6 +5,7 @@
 #include <bpf/bpf_core_read.h>
 #include <bpf/bpf_tracing.h>
 #include <bpf/bpf_endian.h>
+#include "resmon-common.h"
 
 #define EMAD_ETH_HDR_LEN		0x10
 #define EMAD_OP_TLV_LEN			0x10
@@ -99,21 +100,9 @@ int BPF_PROG(mlxsw_emad_rx_listener_func, struct sk_buff *skb)
 	if (op_tlv.status & EMAD_OP_TLV_STATUS_MASK)
 		return 0;
 
-	switch (bpf_ntohs(op_tlv.reg_id)) {
-	case 0x8013: /* MLXSW_REG_RALUE_ID */
-	case 0x3006: /* MLXSW_REG_PTAR_ID */
-	case 0x3027: /* MLXSW_REG_PTCE3_ID */
-	case 0x300F: /* MLXSW_REG_PEFA_ID */
-	case 0x3804: /* MLXSW_REG_IEDR_ID */
-	case 0x8014: /* MLXSW_REG_RAUHT_ID */
-	case 0x8008: /* MLXSW_REG_RATR_ID */
-	case 0x200A: /* MLXSW_REG_SFD_ID */
-	case 0x2013: /* MLXSW_REG_SFDF_ID */
-	case 0x201C: /* MLXSW_REG_SVFA_ID */
-	case 0x8021: /* MLXSW_REG_RIPS_ID */
-	case 0x201F: /* MLXSW_REG_SFMR_ID */
+	if (resmon_reg_supported(bpf_ntohs(op_tlv.reg_id)))
 		return push_to_ringbuf(buf, skb->len - EMAD_ETH_HDR_LEN);
-	};
+
 	return 0;
 }
 
