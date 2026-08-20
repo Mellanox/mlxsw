@@ -106,6 +106,10 @@ The build system also supports staged installations, e.g.:
 $ make PREFIX=/usr LOCALSTATEDIR=/var DESTDIR=${HOME}/tmp/ install
 ```
 
+## Issues
+
+To report issues please send an email to: mlxsw@nvidia.com.
+
 ## Further resources
 
 1. [BPF portability and CO-RE][3]
