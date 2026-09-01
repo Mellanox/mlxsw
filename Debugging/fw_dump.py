@@ -4,6 +4,7 @@ from datetime import datetime
 import subprocess
 import argparse
 import sys
+import os
 
 def make_parser():
     parser = argparse.ArgumentParser(description='A script that triggers mstflint when fw_fatal events occur')
@@ -76,21 +77,24 @@ def dump_fw(p, pci_addr, tar_path):
     if "state error" not in line:
         return
 
-    date_time_str = datetime.now().strftime("%d.%m.%Y,%H:%M:%S")
-    tar_name = date_time_str + "-mstregdump.tar.xz"
-
-    cmd = "for i in {1..3}; do mstregdump %s > /tmp/mstregdump$i; done" % pci_addr
-    p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
-    out, err = p.communicate()
+    files = []
+    for i in 1, 2, 3:
+        fn = f'mstregdump{i}'
+        with open("/tmp/" + fn, 'w') as f:
+            subprocess.run(['mstregdump', pci_addr], stdout=f)
+            files.append(fn)
 
     devlink_health_dump(p, pci_addr)
+    files.append('devlink_health_dump.txt')
 
-    cmd = "cd /tmp && tar cvJf %s/%s mstregdump[123] devlink_health_dump.txt" % (tar_path, tar_name)
-    p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
+    date_time_str = datetime.now().strftime("%d.%m.%Y,%H:%M:%S")
+    tar_name = date_time_str + "-mstregdump.tar.xz"
+    cmd = ['tar', 'cvJf', os.path.join(tar_path, tar_name)] + files
+    p = subprocess.Popen(cmd, cwd='/tmp', stdout=subprocess.PIPE)
     out, err = p.communicate()
 
-    cmd = "rm -rf /tmp/mstregdump* /tmp/devlink_health_dump.txt"
-    p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
+    for fn in files:
+        os.unlink("/tmp/" + fn);
 
 def main(cmdline=None):
     parser = make_parser()
